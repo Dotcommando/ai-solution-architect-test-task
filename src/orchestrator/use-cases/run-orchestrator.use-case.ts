@@ -1,4 +1,10 @@
 import { Injectable } from '@nestjs/common';
+import {
+  COMPONENT_GENERATION_DEFAULT_FRAMEWORK,
+  COMPONENT_GENERATION_DEFAULT_TEST_FRAMEWORK,
+} from '../../component-generation/constants';
+import { IComponentGenerationStepInput } from '../../component-generation/types';
+import { RunComponentGenerationStepUseCase } from '../../component-generation/use-cases/run-component-generation-step.use-case';
 import { RunComponentInterfacesStepUseCase } from '../../component-interfaces/use-cases/run-component-interfaces-step.use-case';
 import { IComponentInterfacesStepInput } from '../../component-interfaces/types';
 import {
@@ -26,12 +32,14 @@ import {
 import { IUnitTestsStepInput } from '../../unit-tests/types';
 import { RunUnitTestsStepUseCase } from '../../unit-tests/use-cases/run-unit-tests-step.use-case';
 import { RunUserFlowsStepUseCase } from '../../user-flows/use-cases/run-user-flows-step.use-case';
+import { COMPONENT_STATE_POLICY } from '../../types';
 import type {
   IRunOrchestratorRequest,
   IRunOrchestratorResponse,
 } from '../types';
 import {
   appendStepReport,
+  buildArtifactsWithGeneratedComponent,
   buildArtifactsFromParsing,
   buildArtifactsWithComponentInterface,
   buildArtifactsWithE2eTests,
@@ -39,6 +47,8 @@ import {
   buildArtifactsWithResolvingGaps,
   buildArtifactsWithUnitTest,
   buildArtifactsWithUserFlows,
+  buildComponentGenerationStageInput,
+  buildComponentGenerationStepReport,
   buildComponentInterfacesStageInput,
   buildComponentInterfacesStepReport,
   buildComponentSourceFiles,
@@ -50,6 +60,8 @@ import {
   buildGapAnalysisStepReport,
   buildParsingStepReport,
   buildProjectRootPath,
+  buildRelatedComponentInterfacesForGeneration,
+  buildRelatedComponentSourceFilesForGeneration,
   buildResolvingGapsStepReport,
   buildRunCompletedUpdate,
   buildRunFailedUpdate,
@@ -61,7 +73,9 @@ import {
   buildUserFlowsStepReport,
   findComponentInterface,
   findComponentSourceFile,
+  findRelatedDumbComponentsForGeneration,
   findRootComponent,
+  findUnitTestComponent,
   normalizeError,
   orderComponentsForInterfaces,
 } from '../utils';
@@ -77,6 +91,7 @@ export class RunOrchestratorUseCase {
     private readonly runComponentInterfacesStepUseCase: RunComponentInterfacesStepUseCase,
     private readonly runUnitTestsStepUseCase: RunUnitTestsStepUseCase,
     private readonly runE2eTestsStepUseCase: RunE2eTestsStepUseCase,
+    private readonly runComponentGenerationStepUseCase: RunComponentGenerationStepUseCase,
   ) {}
 
   async run(
@@ -368,6 +383,84 @@ export class RunOrchestratorUseCase {
         stepsWithE2eTests,
       );
 
+      let artifactsWithGeneratedCode = artifactsWithE2eTests;
+      let stepsWithGeneratedCode = stepsWithE2eTests;
+
+      for (const targetComponent of orderedComponents) {
+        const targetComponentInterface = findComponentInterface(
+          componentInterfaces.components,
+          targetComponent.code,
+        );
+        const targetUnitTests = findUnitTestComponent(
+          unitTests.components,
+          targetComponent.code,
+        );
+        const targetSourceFilePath = findComponentSourceFile(
+          componentSourceFiles,
+          targetComponent.code,
+        );
+        const relatedComponents = findRelatedDumbComponentsForGeneration(
+          orderedComponents,
+          targetComponent,
+        );
+        const relatedComponentInterfaces =
+          buildRelatedComponentInterfacesForGeneration(
+            componentInterfaces.components,
+            relatedComponents,
+          );
+        const relatedComponentSourceFiles =
+          buildRelatedComponentSourceFilesForGeneration(
+            componentSourceFiles,
+            relatedComponents,
+          );
+        const componentGenerationInput = buildComponentGenerationStageInput({
+          componentDescription: request.componentDescription,
+          e2eTests:
+            targetComponent.statePolicy === COMPONENT_STATE_POLICY.SMART
+              ? artifactsWithE2eTests.e2eTests
+              : null,
+          framework: COMPONENT_GENERATION_DEFAULT_FRAMEWORK,
+          gapAnalysis: gapAnalysisResult.output,
+          parsing: parsingResult.output,
+          projectRootPath,
+          relatedComponentInterfaces,
+          relatedComponentSourceFiles,
+          resolvingGaps: resolvingGapsResult.output,
+          targetComponent,
+          targetComponentInterface,
+          targetSourceFilePath,
+          targetUnitTests,
+          testFramework: COMPONENT_GENERATION_DEFAULT_TEST_FRAMEWORK,
+          userFlows: userFlowsResult.output,
+        });
+        const componentGenerationResult =
+          await this.runComponentGenerationStage(componentGenerationInput);
+
+        artifactsWithGeneratedCode = buildArtifactsWithGeneratedComponent(
+          artifactsWithGeneratedCode,
+          COMPONENT_GENERATION_DEFAULT_FRAMEWORK,
+          componentGenerationResult.output,
+        );
+        stepsWithGeneratedCode = appendStepReport(
+          stepsWithGeneratedCode,
+          buildComponentGenerationStepReport(
+            componentGenerationInput,
+            componentGenerationResult.attempts,
+            componentGenerationResult.output,
+            componentGenerationResult.rawOutput,
+            stepsWithGeneratedCode.length + 1,
+            buildRunStepTokenUsage(componentGenerationResult.tokenUsage),
+          ),
+        );
+
+        await this.saveRunProgress(
+          runId,
+          artifactsWithGeneratedCode,
+          parsingDerivedData,
+          stepsWithGeneratedCode,
+        );
+      }
+
       await this.markRunAsCompleted(runId);
 
       return {
@@ -463,6 +556,12 @@ export class RunOrchestratorUseCase {
     input: IE2eTestsStepInput,
   ): ReturnType<RunE2eTestsStepUseCase['execute']> {
     return this.runE2eTestsStepUseCase.execute(input);
+  }
+
+  private async runComponentGenerationStage(
+    input: IComponentGenerationStepInput,
+  ): ReturnType<RunComponentGenerationStepUseCase['execute']> {
+    return this.runComponentGenerationStepUseCase.execute(input);
   }
 
   private async saveRunProgress(

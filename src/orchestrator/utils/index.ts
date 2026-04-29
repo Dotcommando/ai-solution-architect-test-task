@@ -1,5 +1,9 @@
 import { join } from 'node:path';
 import {
+  IComponentGenerationStepInput,
+  IComponentGenerationStepOutput,
+} from '../../component-generation/types';
+import {
   IComponentInterfacesStepInput,
   IComponentInterfacesStepOutput,
 } from '../../component-interfaces/types';
@@ -130,6 +134,42 @@ export function buildArtifactsWithE2eTests(
   return {
     ...artifacts,
     e2eTests: e2eTestsOutput,
+  };
+}
+
+export function buildArtifactsWithGeneratedComponent(
+  artifacts: IRunArtifacts,
+  framework: string,
+  generatedComponentOutput: IComponentGenerationStepOutput,
+): IRunArtifacts {
+  const existingComponents = artifacts.generatedCode?.components ?? [];
+  const generatedComponent = {
+    componentCode: generatedComponentOutput.componentCode,
+    files: generatedComponentOutput.files,
+    statesCovered: generatedComponentOutput.statesCovered,
+    tokensUsed: generatedComponentOutput.tokensUsed,
+  };
+  const components = [...existingComponents, generatedComponent];
+
+  return {
+    ...artifacts,
+    generatedCode: {
+      components,
+      files: components.flatMap((component) => {
+        return component.files;
+      }),
+      framework,
+      statesCovered: deduplicateStrings(
+        components.flatMap((component) => {
+          return component.statesCovered;
+        }),
+      ),
+      tokensUsed: deduplicateStrings(
+        components.flatMap((component) => {
+          return component.tokensUsed;
+        }),
+      ),
+    },
   };
 }
 
@@ -308,6 +348,27 @@ export function buildE2eTestsStepReport(
   });
 }
 
+export function buildComponentGenerationStepReport(
+  input: IComponentGenerationStepInput,
+  attempts: number,
+  output: IComponentGenerationStepOutput,
+  rawOutput: string,
+  order: number,
+  tokenUsage: IRunStepTokenUsage,
+): IRunStepReport {
+  return buildBaseCompletedStepReport({
+    attempts,
+    code: RUN_STEP_CODE.COMPONENT_GENERATION,
+    inputJson: JSON.stringify(input),
+    order,
+    output,
+    promptCode: 'component_generation',
+    rawOutput,
+    targetComponentCode: output.componentCode,
+    tokenUsage,
+  });
+}
+
 export function buildComponentInterfacesStageInput(
   request: IRunOrchestratorRequest,
   parsing: IRunOrchestratorResponse['parsing'],
@@ -335,6 +396,12 @@ export function buildUnitTestsStageInput(
 export function buildE2eTestsStageInput(
   input: IE2eTestsStepInput,
 ): IE2eTestsStepInput {
+  return input;
+}
+
+export function buildComponentGenerationStageInput(
+  input: IComponentGenerationStepInput,
+): IComponentGenerationStepInput {
   return input;
 }
 
@@ -446,6 +513,60 @@ export function findComponentSourceFile(
   }
 
   return componentSourceFile.filename;
+}
+
+export function findUnitTestComponent(
+  unitTests: IUnitTestsStepOutput[],
+  componentCode: string,
+): IUnitTestsStepOutput {
+  const unitTestComponent = unitTests.find((item) => {
+    return item.componentCode === componentCode;
+  });
+
+  if (unitTestComponent === undefined) {
+    throw new Error(
+      `Missing unit tests artifact for component "${componentCode}"`,
+    );
+  }
+
+  return unitTestComponent;
+}
+
+export function findRelatedDumbComponentsForGeneration(
+  components: IParsedComponent[],
+  targetComponent: IParsedComponent,
+): IParsedComponent[] {
+  if (targetComponent.statePolicy !== COMPONENT_STATE_POLICY.SMART) {
+    return [];
+  }
+
+  return components.filter((component) => {
+    return (
+      component.parentCode === targetComponent.code &&
+      component.statePolicy === COMPONENT_STATE_POLICY.DUMB
+    );
+  });
+}
+
+export function buildRelatedComponentInterfacesForGeneration(
+  componentInterfaces: IComponentInterfacesStepOutput[],
+  relatedComponents: IParsedComponent[],
+): IComponentInterfacesStepOutput[] {
+  return relatedComponents.map((component) => {
+    return findComponentInterface(componentInterfaces, component.code);
+  });
+}
+
+export function buildRelatedComponentSourceFilesForGeneration(
+  componentSourceFiles: IComponentFileReference[],
+  relatedComponents: IParsedComponent[],
+): IComponentFileReference[] {
+  return relatedComponents.map((component) => {
+    return {
+      componentCode: component.code,
+      filename: findComponentSourceFile(componentSourceFiles, component.code),
+    };
+  });
 }
 
 export function appendStepReport(
@@ -618,6 +739,10 @@ function buildBaseCompletedStepReport(
     targetComponentCode: params.targetComponentCode,
     tokenUsage: params.tokenUsage,
   };
+}
+
+function deduplicateStrings(values: string[]): string[] {
+  return Array.from(new Set(values));
 }
 
 function buildComponentFilePath(
