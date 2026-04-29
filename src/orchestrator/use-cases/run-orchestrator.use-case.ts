@@ -1,52 +1,69 @@
-import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { RunComponentInterfacesStepUseCase } from '../../component-interfaces/use-cases/run-component-interfaces-step.use-case';
+import { IComponentInterfacesStepInput } from '../../component-interfaces/types';
 import {
-  IComponentInterfacesStepInput,
-  IComponentInterfacesStepOutput,
-} from '../../component-interfaces/types';
+  E2E_TESTS_DEFAULT_TEST_FRAMEWORK,
+  E2E_TESTS_FILE_SUFFIX,
+} from '../../e2e-tests/constants';
+import { IE2eTestsStepInput } from '../../e2e-tests/types';
+import { RunE2eTestsStepUseCase } from '../../e2e-tests/use-cases/run-e2e-tests-step.use-case';
 import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-analysis-step.use-case';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
+import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
 import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
 import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
-import {
-  RUN_FINAL_COMPONENT_TYPE,
-  RUN_STATUS,
-  RUN_STEP_CODE,
-  RUN_STEP_STATUS,
-} from '../../run/constants';
 import { RunRepository } from '../../run/repositories/run.repository';
 import {
   IRunArtifacts,
   IRunDerivedData,
   IRunStepReport,
-  IRunStepTokenUsage,
-  IRunTokenUsageTotals,
 } from '../../run/types';
-import {
-  COMPONENT_STATE_POLICY,
-  IParsedComponent,
-  UI_COMPONENT_TYPE,
-} from '../../types';
 import {
   UNIT_TESTS_DEFAULT_FRAMEWORK,
   UNIT_TESTS_DEFAULT_PROJECT_DIRECTORY,
   UNIT_TESTS_DEFAULT_TEST_FRAMEWORK,
 } from '../../unit-tests/constants';
-import {
-  IComponentFileReference,
-  IRunUnitTestsStepUseCaseRequest,
-  IUnitTestsStepInput,
-  IUnitTestsStepOutput,
-} from '../../unit-tests/types';
+import { IUnitTestsStepInput } from '../../unit-tests/types';
 import { RunUnitTestsStepUseCase } from '../../unit-tests/use-cases/run-unit-tests-step.use-case';
 import { RunUserFlowsStepUseCase } from '../../user-flows/use-cases/run-user-flows-step.use-case';
-import { IUserFlowsStepOutput } from '../../user-flows/types';
-import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
 import type {
   IRunOrchestratorRequest,
   IRunOrchestratorResponse,
 } from '../types';
+import {
+  appendStepReport,
+  buildArtifactsFromParsing,
+  buildArtifactsWithComponentInterface,
+  buildArtifactsWithE2eTests,
+  buildArtifactsWithGapAnalysis,
+  buildArtifactsWithResolvingGaps,
+  buildArtifactsWithUnitTest,
+  buildArtifactsWithUserFlows,
+  buildComponentInterfacesStageInput,
+  buildComponentInterfacesStepReport,
+  buildComponentSourceFiles,
+  buildComponentTestFilePath,
+  buildDerivedDataFromParsing,
+  buildE2eTestFilePath,
+  buildE2eTestsStageInput,
+  buildE2eTestsStepReport,
+  buildGapAnalysisStepReport,
+  buildParsingStepReport,
+  buildProjectRootPath,
+  buildResolvingGapsStepReport,
+  buildRunCompletedUpdate,
+  buildRunFailedUpdate,
+  buildRunStartedUpdate,
+  buildTokenUsageTotals,
+  buildUnitTestsStageInput,
+  buildUnitTestsStepReport,
+  buildUserFlowsStepReport,
+  findComponentInterface,
+  findComponentSourceFile,
+  findRootComponent,
+  normalizeError,
+  orderComponentsForInterfaces,
+} from '../utils';
 
 @Injectable()
 export class RunOrchestratorUseCase {
@@ -58,6 +75,7 @@ export class RunOrchestratorUseCase {
     private readonly runUserFlowsStepUseCase: RunUserFlowsStepUseCase,
     private readonly runComponentInterfacesStepUseCase: RunComponentInterfacesStepUseCase,
     private readonly runUnitTestsStepUseCase: RunUnitTestsStepUseCase,
+    private readonly runE2eTestsStepUseCase: RunE2eTestsStepUseCase,
   ) {}
 
   async run(
@@ -69,37 +87,32 @@ export class RunOrchestratorUseCase {
       await this.markRunAsStarted(runId);
 
       const parsingResult = await this.runParsingStage(request);
-      const parsingArtifacts = this.buildArtifactsFromParsing(
+      const parsingArtifacts = buildArtifactsFromParsing(parsingResult.output);
+      const parsingDerivedData = buildDerivedDataFromParsing(
         parsingResult.output,
       );
-      const parsingDerivedData = this.buildDerivedDataFromParsing(
-        parsingResult.output,
-      );
-      const parsingStepReport = this.buildParsingStepReport(
+      const parsingStepReport = buildParsingStepReport(
         request,
         parsingResult.attempts,
         parsingResult.output,
         parsingResult.rawOutput,
       );
 
-      await this.saveParsingStageResult(
-        runId,
-        parsingArtifacts,
-        parsingDerivedData,
-        [parsingStepReport],
-      );
+      await this.saveRunProgress(runId, parsingArtifacts, parsingDerivedData, [
+        parsingStepReport,
+      ]);
 
       const gapAnalysisResult = await this.runGapAnalysisStage(
         request,
         parsingResult.output,
       );
-      const artifactsWithGapAnalysis = this.buildArtifactsWithGapAnalysis(
+      const artifactsWithGapAnalysis = buildArtifactsWithGapAnalysis(
         parsingArtifacts,
         gapAnalysisResult.output,
       );
-      const stepsWithGapAnalysis = this.appendStepReport(
+      const stepsWithGapAnalysis = appendStepReport(
         [parsingStepReport],
-        this.buildGapAnalysisStepReport(
+        buildGapAnalysisStepReport(
           request,
           gapAnalysisResult.attempts,
           gapAnalysisResult.output,
@@ -107,7 +120,7 @@ export class RunOrchestratorUseCase {
         ),
       );
 
-      await this.saveGapAnalysisStageResult(
+      await this.saveRunProgress(
         runId,
         artifactsWithGapAnalysis,
         parsingDerivedData,
@@ -119,13 +132,13 @@ export class RunOrchestratorUseCase {
         parsingResult.output,
         gapAnalysisResult.output,
       );
-      const artifactsWithResolvingGaps = this.buildArtifactsWithResolvingGaps(
+      const artifactsWithResolvingGaps = buildArtifactsWithResolvingGaps(
         artifactsWithGapAnalysis,
         resolvingGapsResult.output,
       );
-      const stepsWithResolvingGaps = this.appendStepReport(
+      const stepsWithResolvingGaps = appendStepReport(
         stepsWithGapAnalysis,
-        this.buildResolvingGapsStepReport(
+        buildResolvingGapsStepReport(
           request,
           resolvingGapsResult.attempts,
           resolvingGapsResult.output,
@@ -133,7 +146,7 @@ export class RunOrchestratorUseCase {
         ),
       );
 
-      await this.saveResolvingGapsStageResult(
+      await this.saveRunProgress(
         runId,
         artifactsWithResolvingGaps,
         parsingDerivedData,
@@ -146,13 +159,13 @@ export class RunOrchestratorUseCase {
         gapAnalysisResult.output,
         resolvingGapsResult.output,
       );
-      const artifactsWithUserFlows = this.buildArtifactsWithUserFlows(
+      const artifactsWithUserFlows = buildArtifactsWithUserFlows(
         artifactsWithResolvingGaps,
         userFlowsResult.output,
       );
-      const stepsWithUserFlows = this.appendStepReport(
+      const stepsWithUserFlows = appendStepReport(
         stepsWithResolvingGaps,
-        this.buildUserFlowsStepReport(
+        buildUserFlowsStepReport(
           request,
           userFlowsResult.attempts,
           userFlowsResult.output,
@@ -160,40 +173,38 @@ export class RunOrchestratorUseCase {
         ),
       );
 
-      await this.saveUserFlowsStageResult(
+      await this.saveRunProgress(
         runId,
         artifactsWithUserFlows,
         parsingDerivedData,
         stepsWithUserFlows,
       );
 
-      const orderedComponents = this.orderComponentsForInterfaces(
+      const orderedComponents = orderComponentsForInterfaces(
         parsingResult.output.components,
       );
       let artifactsWithComponentInterfaces = artifactsWithUserFlows;
       let stepsWithComponentInterfaces = stepsWithUserFlows;
 
       for (const targetComponent of orderedComponents) {
-        const componentInterfacesInput =
-          this.buildComponentInterfacesStageInput(
-            request,
-            parsingResult.output,
-            gapAnalysisResult.output,
-            resolvingGapsResult.output,
-            targetComponent,
-            userFlowsResult.output,
-          );
+        const componentInterfacesInput = buildComponentInterfacesStageInput(
+          request,
+          parsingResult.output,
+          gapAnalysisResult.output,
+          resolvingGapsResult.output,
+          targetComponent,
+          userFlowsResult.output,
+        );
         const componentInterfacesResult =
           await this.runComponentInterfacesStage(componentInterfacesInput);
 
-        artifactsWithComponentInterfaces =
-          this.buildArtifactsWithComponentInterface(
-            artifactsWithComponentInterfaces,
-            componentInterfacesResult.output,
-          );
-        stepsWithComponentInterfaces = this.appendStepReport(
+        artifactsWithComponentInterfaces = buildArtifactsWithComponentInterface(
+          artifactsWithComponentInterfaces,
+          componentInterfacesResult.output,
+        );
+        stepsWithComponentInterfaces = appendStepReport(
           stepsWithComponentInterfaces,
-          this.buildComponentInterfacesStepReport(
+          buildComponentInterfacesStepReport(
             componentInterfacesInput,
             componentInterfacesResult.attempts,
             componentInterfacesResult.output,
@@ -202,7 +213,7 @@ export class RunOrchestratorUseCase {
           ),
         );
 
-        await this.saveComponentInterfacesStageResult(
+        await this.saveRunProgress(
           runId,
           artifactsWithComponentInterfaces,
           parsingDerivedData,
@@ -219,8 +230,11 @@ export class RunOrchestratorUseCase {
         );
       }
 
-      const projectRootPath = this.buildUnitTestsProjectRootPath();
-      const componentSourceFiles = this.buildComponentSourceFiles(
+      const projectRootPath = buildProjectRootPath(
+        process.cwd(),
+        UNIT_TESTS_DEFAULT_PROJECT_DIRECTORY,
+      );
+      const componentSourceFiles = buildComponentSourceFiles(
         projectRootPath,
         orderedComponents,
       );
@@ -228,19 +242,19 @@ export class RunOrchestratorUseCase {
       let stepsWithUnitTests = stepsWithComponentInterfaces;
 
       for (const targetComponent of orderedComponents) {
-        const targetComponentInterface = this.findComponentInterface(
+        const targetComponentInterface = findComponentInterface(
           componentInterfaces.components,
           targetComponent.code,
         );
-        const targetSourceFilePath = this.findComponentSourceFile(
+        const targetSourceFilePath = findComponentSourceFile(
           componentSourceFiles,
           targetComponent.code,
         );
-        const targetTestFilePath = this.buildComponentTestFilePath(
+        const targetTestFilePath = buildComponentTestFilePath(
           projectRootPath,
           targetComponent,
         );
-        const unitTestsInput = this.buildUnitTestsStageInput({
+        const unitTestsInput = buildUnitTestsStageInput({
           componentDescription: request.componentDescription,
           componentInterfaces,
           componentSourceFiles,
@@ -258,13 +272,13 @@ export class RunOrchestratorUseCase {
         });
         const unitTestsResult = await this.runUnitTestsStage(unitTestsInput);
 
-        artifactsWithUnitTests = this.buildArtifactsWithUnitTest(
+        artifactsWithUnitTests = buildArtifactsWithUnitTest(
           artifactsWithUnitTests,
           unitTestsResult.output,
         );
-        stepsWithUnitTests = this.appendStepReport(
+        stepsWithUnitTests = appendStepReport(
           stepsWithUnitTests,
-          this.buildUnitTestsStepReport(
+          buildUnitTestsStepReport(
             unitTestsInput,
             unitTestsResult.attempts,
             unitTestsResult.output,
@@ -273,7 +287,7 @@ export class RunOrchestratorUseCase {
           ),
         );
 
-        await this.saveUnitTestsStageResult(
+        await this.saveRunProgress(
           runId,
           artifactsWithUnitTests,
           parsingDerivedData,
@@ -281,9 +295,70 @@ export class RunOrchestratorUseCase {
         );
       }
 
-      // await this.runE2eTestsStage(runId);
-      // await this.runComponentGenerationStage(runId);
-      // await this.runValidationStage(runId);
+      const unitTests = artifactsWithUnitTests.unitTests;
+
+      if (unitTests === null) {
+        throw new Error('Unit tests artifact is required for e2e tests');
+      }
+
+      const rootComponent = findRootComponent(parsingResult.output);
+
+      if (rootComponent === null) {
+        throw new Error('Root component is required for e2e tests');
+      }
+
+      const rootComponentInterface = findComponentInterface(
+        componentInterfaces.components,
+        rootComponent.code,
+      );
+      const rootSourceFilePath = findComponentSourceFile(
+        componentSourceFiles,
+        rootComponent.code,
+      );
+      const e2eTestFilePath = buildE2eTestFilePath(
+        projectRootPath,
+        rootComponent,
+        E2E_TESTS_FILE_SUFFIX,
+      );
+      const e2eTestsInput = buildE2eTestsStageInput({
+        componentDescription: request.componentDescription,
+        componentInterfaces,
+        componentSourceFiles,
+        e2eTestFilePath,
+        framework: UNIT_TESTS_DEFAULT_FRAMEWORK,
+        gapAnalysis: gapAnalysisResult.output,
+        parsing: parsingResult.output,
+        projectRootPath,
+        resolvingGaps: resolvingGapsResult.output,
+        rootComponent,
+        rootComponentInterface,
+        rootSourceFilePath,
+        testFramework: E2E_TESTS_DEFAULT_TEST_FRAMEWORK,
+        unitTests,
+        userFlows: userFlowsResult.output,
+      });
+      const e2eTestsResult = await this.runE2eTestsStage(e2eTestsInput);
+      const artifactsWithE2eTests = buildArtifactsWithE2eTests(
+        artifactsWithUnitTests,
+        e2eTestsResult.output,
+      );
+      const stepsWithE2eTests = appendStepReport(
+        stepsWithUnitTests,
+        buildE2eTestsStepReport(
+          e2eTestsInput,
+          e2eTestsResult.attempts,
+          e2eTestsResult.output,
+          e2eTestsResult.rawOutput,
+          stepsWithUnitTests.length + 1,
+        ),
+      );
+
+      await this.saveRunProgress(
+        runId,
+        artifactsWithE2eTests,
+        parsingDerivedData,
+        stepsWithE2eTests,
+      );
 
       await this.markRunAsCompleted(runId);
 
@@ -315,11 +390,7 @@ export class RunOrchestratorUseCase {
   }
 
   private async markRunAsStarted(runId: string): Promise<void> {
-    await this.runRepository.updateById({
-      id: runId,
-      startedAt: new Date(),
-      status: RUN_STATUS.RUNNING,
-    });
+    await this.runRepository.updateById(buildRunStartedUpdate(runId));
   }
 
   private async runParsingStage(
@@ -380,479 +451,13 @@ export class RunOrchestratorUseCase {
     return this.runUnitTestsStepUseCase.execute(input);
   }
 
-  private buildArtifactsFromParsing(
-    parsingOutput: IRunOrchestratorResponse['parsing'],
-  ): IRunArtifacts {
-    return {
-      componentInterfaces: null,
-      e2eTests: null,
-      gapAnalysis: null,
-      generatedCode: null,
-      parsing: parsingOutput,
-      resolvingGaps: null,
-      unitTests: null,
-      userFlows: null,
-      validation: null,
-    };
+  private async runE2eTestsStage(
+    input: IE2eTestsStepInput,
+  ): ReturnType<RunE2eTestsStepUseCase['execute']> {
+    return this.runE2eTestsStepUseCase.execute(input);
   }
 
-  private buildArtifactsWithGapAnalysis(
-    artifacts: IRunArtifacts,
-    gapAnalysisOutput: IGapAnalysisStepOutput,
-  ): IRunArtifacts {
-    return {
-      ...artifacts,
-      gapAnalysis: gapAnalysisOutput,
-    };
-  }
-
-  private buildArtifactsWithResolvingGaps(
-    artifacts: IRunArtifacts,
-    resolvingGapsOutput: IResolvingGapsStepOutput,
-  ): IRunArtifacts {
-    return {
-      ...artifacts,
-      resolvingGaps: resolvingGapsOutput,
-    };
-  }
-
-  private buildArtifactsWithUserFlows(
-    artifacts: IRunArtifacts,
-    userFlowsOutput: IUserFlowsStepOutput,
-  ): IRunArtifacts {
-    return {
-      ...artifacts,
-      userFlows: userFlowsOutput,
-    };
-  }
-
-  private buildArtifactsWithComponentInterface(
-    artifacts: IRunArtifacts,
-    componentInterfaceOutput: IComponentInterfacesStepOutput,
-  ): IRunArtifacts {
-    const existingComponents = artifacts.componentInterfaces?.components ?? [];
-
-    return {
-      ...artifacts,
-      componentInterfaces: {
-        components: [...existingComponents, componentInterfaceOutput],
-      },
-    };
-  }
-
-  private buildArtifactsWithUnitTest(
-    artifacts: IRunArtifacts,
-    unitTestOutput: IUnitTestsStepOutput,
-  ): IRunArtifacts {
-    const existingComponents = artifacts.unitTests?.components ?? [];
-
-    return {
-      ...artifacts,
-      unitTests: {
-        components: [...existingComponents, unitTestOutput],
-      },
-    };
-  }
-
-  private buildDerivedDataFromParsing(
-    parsingOutput: IRunOrchestratorResponse['parsing'],
-  ): IRunDerivedData {
-    const rootComponent =
-      parsingOutput.components.find((component) => {
-        return component.code === parsingOutput.rootComponentCode;
-      }) ?? null;
-
-    return {
-      constraintDescriptions: parsingOutput.constraints.map((constraint) => {
-        return constraint.description;
-      }),
-      extractionConstraints: parsingOutput.constraints,
-      extractionSpecifiedStates: parsingOutput.specifiedStates,
-      extractionTokenReferences: parsingOutput.tokenReferences,
-      referencedTokenNames: parsingOutput.tokenReferences.map(
-        (tokenReference) => {
-          return tokenReference.name;
-        },
-      ),
-      rootComponent,
-      rootComponentName: rootComponent?.name ?? null,
-      rootComponentType: this.mapRootComponentType(rootComponent?.type),
-      specifiedStateNames: parsingOutput.specifiedStates.map((state) => {
-        return state.name;
-      }),
-    };
-  }
-
-  private buildParsingStepReport(
-    request: IRunOrchestratorRequest,
-    attempts: number,
-    output: IRunOrchestratorResponse['parsing'],
-    rawOutput: string,
-  ): IRunStepReport {
-    const now = new Date();
-
-    return {
-      attempts,
-      code: RUN_STEP_CODE.PARSING,
-      completedAt: now,
-      durationMs: null,
-      errorDetails: null,
-      errorMessage: null,
-      inputJson: JSON.stringify(request),
-      model: {
-        model: null,
-        provider: 'openai',
-      },
-      order: 1,
-      outputJson: this.serializeOutputJson(output),
-      prompt: {
-        code: 'parsing',
-        variant: 'control',
-        version: null,
-      },
-      rawOutput,
-      startedAt: now,
-      status: RUN_STEP_STATUS.COMPLETED,
-      targetComponentCode: null,
-      tokenUsage: this.buildEmptyStepTokenUsage(),
-    };
-  }
-
-  private buildGapAnalysisStepReport(
-    request: IRunOrchestratorRequest,
-    attempts: number,
-    output: IGapAnalysisStepOutput,
-    rawOutput: string,
-  ): IRunStepReport {
-    const now = new Date();
-
-    return {
-      attempts,
-      code: RUN_STEP_CODE.GAP_ANALYSIS,
-      completedAt: now,
-      durationMs: null,
-      errorDetails: null,
-      errorMessage: null,
-      inputJson: JSON.stringify({
-        componentDescription: request.componentDescription,
-      }),
-      model: {
-        model: null,
-        provider: 'openai',
-      },
-      order: 2,
-      outputJson: this.serializeOutputJson(output),
-      prompt: {
-        code: 'gap_analysis',
-        variant: 'control',
-        version: null,
-      },
-      rawOutput,
-      startedAt: now,
-      status: RUN_STEP_STATUS.COMPLETED,
-      targetComponentCode: null,
-      tokenUsage: this.buildEmptyStepTokenUsage(),
-    };
-  }
-
-  private buildResolvingGapsStepReport(
-    request: IRunOrchestratorRequest,
-    attempts: number,
-    output: IResolvingGapsStepOutput,
-    rawOutput: string,
-  ): IRunStepReport {
-    const now = new Date();
-
-    return {
-      attempts,
-      code: RUN_STEP_CODE.RESOLVING_GAPS,
-      completedAt: now,
-      durationMs: null,
-      errorDetails: null,
-      errorMessage: null,
-      inputJson: JSON.stringify({
-        componentDescription: request.componentDescription,
-      }),
-      model: {
-        model: null,
-        provider: 'openai',
-      },
-      order: 3,
-      outputJson: this.serializeOutputJson(output),
-      prompt: {
-        code: 'resolving_gaps',
-        variant: 'control',
-        version: null,
-      },
-      rawOutput,
-      startedAt: now,
-      status: RUN_STEP_STATUS.COMPLETED,
-      targetComponentCode: null,
-      tokenUsage: this.buildEmptyStepTokenUsage(),
-    };
-  }
-
-  private buildUserFlowsStepReport(
-    request: IRunOrchestratorRequest,
-    attempts: number,
-    output: IUserFlowsStepOutput,
-    rawOutput: string,
-  ): IRunStepReport {
-    const now = new Date();
-
-    return {
-      attempts,
-      code: RUN_STEP_CODE.USER_FLOWS,
-      completedAt: now,
-      durationMs: null,
-      errorDetails: null,
-      errorMessage: null,
-      inputJson: JSON.stringify({
-        componentDescription: request.componentDescription,
-      }),
-      model: {
-        model: null,
-        provider: 'openai',
-      },
-      order: 4,
-      outputJson: this.serializeOutputJson(output),
-      prompt: {
-        code: 'user_flows',
-        variant: 'control',
-        version: null,
-      },
-      rawOutput,
-      startedAt: now,
-      status: RUN_STEP_STATUS.COMPLETED,
-      targetComponentCode: null,
-      tokenUsage: this.buildEmptyStepTokenUsage(),
-    };
-  }
-
-  private buildComponentInterfacesStepReport(
-    input: IComponentInterfacesStepInput,
-    attempts: number,
-    output: IComponentInterfacesStepOutput,
-    rawOutput: string,
-    order: number,
-  ): IRunStepReport {
-    const now = new Date();
-
-    return {
-      attempts,
-      code: RUN_STEP_CODE.COMPONENT_INTERFACES,
-      completedAt: now,
-      durationMs: null,
-      errorDetails: null,
-      errorMessage: null,
-      inputJson: JSON.stringify(input),
-      model: {
-        model: null,
-        provider: 'openai',
-      },
-      order,
-      outputJson: this.serializeOutputJson(output),
-      prompt: {
-        code: 'component_interfaces',
-        variant: 'control',
-        version: null,
-      },
-      rawOutput,
-      startedAt: now,
-      status: RUN_STEP_STATUS.COMPLETED,
-      targetComponentCode: output.componentCode,
-      tokenUsage: this.buildEmptyStepTokenUsage(),
-    };
-  }
-
-  private buildUnitTestsStepReport(
-    input: IUnitTestsStepInput,
-    attempts: number,
-    output: IUnitTestsStepOutput,
-    rawOutput: string,
-    order: number,
-  ): IRunStepReport {
-    const now = new Date();
-
-    return {
-      attempts,
-      code: RUN_STEP_CODE.UNIT_TESTS,
-      completedAt: now,
-      durationMs: null,
-      errorDetails: null,
-      errorMessage: null,
-      inputJson: JSON.stringify(input),
-      model: {
-        model: null,
-        provider: 'openai',
-      },
-      order,
-      outputJson: this.serializeOutputJson(output),
-      prompt: {
-        code: 'unit_tests',
-        variant: 'control',
-        version: null,
-      },
-      rawOutput,
-      startedAt: now,
-      status: RUN_STEP_STATUS.COMPLETED,
-      targetComponentCode: output.componentCode,
-      tokenUsage: this.buildEmptyStepTokenUsage(),
-    };
-  }
-
-  private buildComponentInterfacesStageInput(
-    request: IRunOrchestratorRequest,
-    parsing: IRunOrchestratorResponse['parsing'],
-    gapAnalysis: IGapAnalysisStepOutput,
-    resolvingGaps: IResolvingGapsStepOutput,
-    targetComponent: IParsedComponent,
-    userFlows: IUserFlowsStepOutput,
-  ): IComponentInterfacesStepInput {
-    return {
-      componentDescription: request.componentDescription,
-      gapAnalysis,
-      parsing,
-      resolvingGaps,
-      targetComponent,
-      userFlows,
-    };
-  }
-
-  private buildUnitTestsStageInput(
-    request: IRunUnitTestsStepUseCaseRequest,
-  ): IUnitTestsStepInput {
-    return {
-      componentDescription: request.componentDescription,
-      componentInterfaces: request.componentInterfaces,
-      componentSourceFiles: request.componentSourceFiles,
-      framework: request.framework,
-      gapAnalysis: request.gapAnalysis,
-      parsing: request.parsing,
-      projectRootPath: request.projectRootPath,
-      resolvingGaps: request.resolvingGaps,
-      targetComponent: request.targetComponent,
-      targetComponentInterface: request.targetComponentInterface,
-      targetSourceFilePath: request.targetSourceFilePath,
-      targetTestFilePath: request.targetTestFilePath,
-      testFramework: request.testFramework,
-      userFlows: request.userFlows,
-    };
-  }
-
-  private orderComponentsForInterfaces(
-    components: IParsedComponent[],
-  ): IParsedComponent[] {
-    const dumbComponents = components.filter((component) => {
-      return component.statePolicy === COMPONENT_STATE_POLICY.DUMB;
-    });
-    const smartComponents = components.filter((component) => {
-      return component.statePolicy === COMPONENT_STATE_POLICY.SMART;
-    });
-
-    return [...dumbComponents, ...smartComponents];
-  }
-
-  private buildUnitTestsProjectRootPath(): string {
-    return join(process.cwd(), UNIT_TESTS_DEFAULT_PROJECT_DIRECTORY);
-  }
-
-  private buildComponentSourceFiles(
-    projectRootPath: string,
-    components: IParsedComponent[],
-  ): IComponentFileReference[] {
-    return components.map((component) => {
-      return {
-        componentCode: component.code,
-        filename: this.buildComponentSourceFilePath(projectRootPath, component),
-      };
-    });
-  }
-
-  private buildComponentSourceFilePath(
-    projectRootPath: string,
-    component: IParsedComponent,
-  ): string {
-    const componentFileName = this.buildComponentFileName(component.code);
-
-    return join(
-      projectRootPath,
-      'src',
-      'components',
-      componentFileName,
-      `${componentFileName}.tsx`,
-    );
-  }
-
-  private buildComponentTestFilePath(
-    projectRootPath: string,
-    component: IParsedComponent,
-  ): string {
-    const componentFileName = this.buildComponentFileName(component.code);
-
-    return join(
-      projectRootPath,
-      'src',
-      'components',
-      componentFileName,
-      `${componentFileName}.spec.tsx`,
-    );
-  }
-
-  private buildComponentFileName(componentCode: string): string {
-    return componentCode
-      .split('_')
-      .filter((segment) => {
-        return segment !== '';
-      })
-      .map((segment) => {
-        return `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`;
-      })
-      .join('');
-  }
-
-  private findComponentInterface(
-    componentInterfaces: IComponentInterfacesStepOutput[],
-    componentCode: string,
-  ): IComponentInterfacesStepOutput {
-    const componentInterface = componentInterfaces.find((item) => {
-      return item.componentCode === componentCode;
-    });
-
-    if (componentInterface === undefined) {
-      throw new Error(
-        `Missing component interface artifact for component "${componentCode}"`,
-      );
-    }
-
-    return componentInterface;
-  }
-
-  private findComponentSourceFile(
-    componentSourceFiles: IComponentFileReference[],
-    componentCode: string,
-  ): string {
-    const componentSourceFile = componentSourceFiles.find((item) => {
-      return item.componentCode === componentCode;
-    });
-
-    if (componentSourceFile === undefined) {
-      throw new Error(
-        `Missing component source file for component "${componentCode}"`,
-      );
-    }
-
-    return componentSourceFile.filename;
-  }
-
-  private appendStepReport(
-    steps: IRunStepReport[],
-    stepReport: IRunStepReport,
-  ): IRunStepReport[] {
-    return [...steps, stepReport];
-  }
-
-  private async saveParsingStageResult(
+  private async saveRunProgress(
     runId: string,
     artifacts: IRunArtifacts,
     derivedData: IRunDerivedData,
@@ -863,179 +468,19 @@ export class RunOrchestratorUseCase {
       derivedData,
       id: runId,
       steps,
-      tokenUsageTotals: this.buildTokenUsageTotals(steps),
-    });
-  }
-
-  private async saveResolvingGapsStageResult(
-    runId: string,
-    artifacts: IRunArtifacts,
-    derivedData: IRunDerivedData,
-    steps: IRunStepReport[],
-  ): Promise<void> {
-    await this.runRepository.updateById({
-      artifacts,
-      derivedData,
-      id: runId,
-      steps,
-      tokenUsageTotals: this.buildTokenUsageTotals(steps),
-    });
-  }
-
-  private async saveUserFlowsStageResult(
-    runId: string,
-    artifacts: IRunArtifacts,
-    derivedData: IRunDerivedData,
-    steps: IRunStepReport[],
-  ): Promise<void> {
-    await this.runRepository.updateById({
-      artifacts,
-      derivedData,
-      id: runId,
-      steps,
-      tokenUsageTotals: this.buildTokenUsageTotals(steps),
-    });
-  }
-
-  private async saveComponentInterfacesStageResult(
-    runId: string,
-    artifacts: IRunArtifacts,
-    derivedData: IRunDerivedData,
-    steps: IRunStepReport[],
-  ): Promise<void> {
-    await this.runRepository.updateById({
-      artifacts,
-      derivedData,
-      id: runId,
-      steps,
-      tokenUsageTotals: this.buildTokenUsageTotals(steps),
-    });
-  }
-
-  private async saveUnitTestsStageResult(
-    runId: string,
-    artifacts: IRunArtifacts,
-    derivedData: IRunDerivedData,
-    steps: IRunStepReport[],
-  ): Promise<void> {
-    await this.runRepository.updateById({
-      artifacts,
-      derivedData,
-      id: runId,
-      steps,
-      tokenUsageTotals: this.buildTokenUsageTotals(steps),
-    });
-  }
-
-  private async saveGapAnalysisStageResult(
-    runId: string,
-    artifacts: IRunArtifacts,
-    derivedData: IRunDerivedData,
-    steps: IRunStepReport[],
-  ): Promise<void> {
-    await this.runRepository.updateById({
-      artifacts,
-      derivedData,
-      id: runId,
-      steps,
-      tokenUsageTotals: this.buildTokenUsageTotals(steps),
+      tokenUsageTotals: buildTokenUsageTotals(steps),
     });
   }
 
   private async markRunAsCompleted(runId: string): Promise<void> {
-    await this.runRepository.updateById({
-      completedAt: new Date(),
-      id: runId,
-      status: RUN_STATUS.COMPLETED,
-    });
+    await this.runRepository.updateById(buildRunCompletedUpdate(runId));
   }
 
   private async markRunAsFailed(runId: string, error: unknown): Promise<void> {
-    const normalizedError = this.normalizeError(error);
+    const normalizedError = normalizeError(error);
 
-    await this.runRepository.updateById({
-      completedAt: new Date(),
-      errorDetails: this.extractCauseMessage(normalizedError),
-      errorMessage: normalizedError.message,
-      id: runId,
-      status: RUN_STATUS.FAILED,
-    });
-  }
-
-  private normalizeError(error: unknown): Error {
-    if (error instanceof Error) {
-      return error;
-    }
-
-    return new Error('Unknown orchestrator error');
-  }
-
-  private extractCauseMessage(error: Error): string | null {
-    if (!(error.cause instanceof Error)) {
-      return null;
-    }
-
-    return this.extractCauseMessage(error.cause) ?? error.cause.message;
-  }
-
-  private buildEmptyStepTokenUsage(): IRunStepTokenUsage {
-    return {
-      cachedInputTokens: null,
-      inputTokens: null,
-      outputTokens: null,
-      reasoningTokens: null,
-      totalTokens: null,
-    };
-  }
-
-  private serializeOutputJson(output: object): string {
-    return JSON.stringify(output);
-  }
-
-  private buildTokenUsageTotals(steps: IRunStepReport[]): IRunTokenUsageTotals {
-    return steps.reduce<IRunTokenUsageTotals>(
-      (totals, step) => {
-        return {
-          cachedInputTokens:
-            totals.cachedInputTokens + (step.tokenUsage.cachedInputTokens ?? 0),
-          inputTokens: totals.inputTokens + (step.tokenUsage.inputTokens ?? 0),
-          outputTokens:
-            totals.outputTokens + (step.tokenUsage.outputTokens ?? 0),
-          reasoningTokens:
-            totals.reasoningTokens + (step.tokenUsage.reasoningTokens ?? 0),
-          totalTokens: totals.totalTokens + (step.tokenUsage.totalTokens ?? 0),
-        };
-      },
-      {
-        cachedInputTokens: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-        reasoningTokens: 0,
-        totalTokens: 0,
-      },
+    await this.runRepository.updateById(
+      buildRunFailedUpdate(runId, normalizedError),
     );
-  }
-
-  private mapRootComponentType(
-    componentType: UI_COMPONENT_TYPE | undefined,
-  ): RUN_FINAL_COMPONENT_TYPE | null {
-    if (componentType === undefined) {
-      return null;
-    }
-
-    switch (componentType) {
-      case UI_COMPONENT_TYPE.CARD:
-        return RUN_FINAL_COMPONENT_TYPE.CARD;
-      case UI_COMPONENT_TYPE.FORM:
-        return RUN_FINAL_COMPONENT_TYPE.FORM;
-      case UI_COMPONENT_TYPE.MODAL:
-        return RUN_FINAL_COMPONENT_TYPE.MODAL;
-      case UI_COMPONENT_TYPE.PAGE:
-        return RUN_FINAL_COMPONENT_TYPE.PAGE;
-      case UI_COMPONENT_TYPE.TABLE:
-        return RUN_FINAL_COMPONENT_TYPE.TABLE;
-      default:
-        return null;
-    }
   }
 }

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { join } from 'node:path';
 import { RunComponentInterfacesStepUseCase } from '../../component-interfaces/use-cases/run-component-interfaces-step.use-case';
+import { RunE2eTestsStepUseCase } from '../../e2e-tests/use-cases/run-e2e-tests-step.use-case';
 import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-analysis-step.use-case';
 import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
 import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
@@ -75,6 +76,15 @@ describe('RunOrchestratorUseCase', () => {
     };
   };
 
+  const createRunE2eTestsStepUseCaseMock = (): Pick<
+    RunE2eTestsStepUseCase,
+    'execute'
+  > => {
+    return {
+      execute: jest.fn(),
+    };
+  };
+
   it('creates a run, executes parsing, and persists progress', async () => {
     const runRepository = createRunRepositoryMock();
     const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();
@@ -84,6 +94,7 @@ describe('RunOrchestratorUseCase', () => {
     const runComponentInterfacesStepUseCase =
       createRunComponentInterfacesStepUseCaseMock();
     const runUnitTestsStepUseCase = createRunUnitTestsStepUseCaseMock();
+    const runE2eTestsStepUseCase = createRunE2eTestsStepUseCaseMock();
 
     runRepository.create = jest.fn().mockResolvedValue('run-id-1');
     runRepository.updateById = jest.fn().mockResolvedValue(null);
@@ -302,6 +313,37 @@ describe('RunOrchestratorUseCase', () => {
         },
         rawOutput: '{"componentCode":"payment_card"}',
       });
+    runE2eTestsStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        coveredBehaviors: [
+          'propagates selection and recovery behavior across child components',
+        ],
+        coveredComponentCodes: ['payment_card', 'card_brand_icon'],
+        coveredFlowCodes: [
+          'select_saved_card_fast_path',
+          'review_then_select_card',
+          'invalid_delete_attempt',
+        ],
+        coveredStates: ['selected'],
+        files: [
+          {
+            content: 'describe("PaymentCard e2e", () => {});',
+            filename: join(
+              process.cwd(),
+              'generated/frontend',
+              'src',
+              'components',
+              'PaymentCard',
+              'PaymentCard.e2e.spec.tsx',
+            ),
+          },
+        ],
+        rootComponentCode: 'payment_card',
+        rootComponentName: 'Payment card',
+      },
+      rawOutput: '{"rootComponentCode":"payment_card"}',
+    });
 
     const useCase = new RunOrchestratorUseCase(
       runRepository as RunRepository,
@@ -311,6 +353,7 @@ describe('RunOrchestratorUseCase', () => {
       runUserFlowsStepUseCase as RunUserFlowsStepUseCase,
       runComponentInterfacesStepUseCase as RunComponentInterfacesStepUseCase,
       runUnitTestsStepUseCase as RunUnitTestsStepUseCase,
+      runE2eTestsStepUseCase as RunE2eTestsStepUseCase,
     );
 
     await expect(
@@ -612,6 +655,104 @@ describe('RunOrchestratorUseCase', () => {
         ]),
       }),
     });
+    expect(runE2eTestsStepUseCase.execute).toHaveBeenCalledWith({
+      componentDescription: 'Payment card component.',
+      componentInterfaces: {
+        components: [
+          expect.objectContaining({
+            componentCode: 'card_brand_icon',
+          }),
+          expect.objectContaining({
+            componentCode: 'payment_card',
+          }),
+        ],
+      },
+      componentSourceFiles: [
+        {
+          componentCode: 'card_brand_icon',
+          filename: join(
+            process.cwd(),
+            'generated/frontend',
+            'src',
+            'components',
+            'CardBrandIcon',
+            'CardBrandIcon.tsx',
+          ),
+        },
+        {
+          componentCode: 'payment_card',
+          filename: join(
+            process.cwd(),
+            'generated/frontend',
+            'src',
+            'components',
+            'PaymentCard',
+            'PaymentCard.tsx',
+          ),
+        },
+      ],
+      e2eTestFilePath: join(
+        process.cwd(),
+        'generated/frontend',
+        'src',
+        'components',
+        'PaymentCard',
+        'PaymentCard.e2e.spec.tsx',
+      ),
+      framework: 'React',
+      gapAnalysis: expect.objectContaining({
+        missingStates: ['Selected state is not explicitly defined.'],
+      }),
+      parsing: expect.objectContaining({
+        businessContext: 'merchant dashboard',
+      }),
+      projectRootPath: join(process.cwd(), 'generated/frontend'),
+      resolvingGaps: expect.objectContaining({
+        decisions: [
+          expect.objectContaining({
+            code: 'define_selected_state',
+          }),
+        ],
+      }),
+      rootComponent: expect.objectContaining({
+        code: 'payment_card',
+      }),
+      rootComponentInterface: expect.objectContaining({
+        componentCode: 'payment_card',
+      }),
+      rootSourceFilePath: join(
+        process.cwd(),
+        'generated/frontend',
+        'src',
+        'components',
+        'PaymentCard',
+        'PaymentCard.tsx',
+      ),
+      testFramework: 'Jest + React Testing Library',
+      unitTests: {
+        components: [
+          expect.objectContaining({
+            componentCode: 'card_brand_icon',
+          }),
+          expect.objectContaining({
+            componentCode: 'payment_card',
+          }),
+        ],
+      },
+      userFlows: expect.objectContaining({
+        flows: expect.arrayContaining([
+          expect.objectContaining({
+            code: 'select_saved_card_fast_path',
+          }),
+          expect.objectContaining({
+            code: 'review_then_select_card',
+          }),
+          expect.objectContaining({
+            code: 'invalid_delete_attempt',
+          }),
+        ]),
+      }),
+    });
     expect(runRepository.create).toHaveBeenCalledWith({
       input: {
         componentDescription: 'Payment card component.',
@@ -619,7 +760,7 @@ describe('RunOrchestratorUseCase', () => {
         screenshotUrl: null,
       },
     });
-    expect(runRepository.updateById).toHaveBeenCalledTimes(10);
+    expect(runRepository.updateById).toHaveBeenCalledTimes(11);
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -918,6 +1059,67 @@ describe('RunOrchestratorUseCase', () => {
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
       10,
       expect.objectContaining({
+        artifacts: expect.objectContaining({
+          e2eTests: expect.objectContaining({
+            rootComponentCode: 'payment_card',
+          }),
+          unitTests: expect.objectContaining({
+            components: [
+              expect.objectContaining({
+                componentCode: 'card_brand_icon',
+              }),
+              expect.objectContaining({
+                componentCode: 'payment_card',
+              }),
+            ],
+          }),
+        }),
+        id: 'run-id-1',
+        steps: [
+          expect.objectContaining({
+            code: 'parsing',
+          }),
+          expect.objectContaining({
+            code: 'gap_analysis',
+          }),
+          expect.objectContaining({
+            code: 'resolving_gaps',
+          }),
+          expect.objectContaining({
+            code: 'user_flows',
+          }),
+          expect.objectContaining({
+            code: 'component_interfaces',
+            order: 5,
+            targetComponentCode: 'card_brand_icon',
+          }),
+          expect.objectContaining({
+            code: 'component_interfaces',
+            order: 6,
+            targetComponentCode: 'payment_card',
+          }),
+          expect.objectContaining({
+            code: 'unit_tests',
+            order: 7,
+            targetComponentCode: 'card_brand_icon',
+          }),
+          expect.objectContaining({
+            code: 'unit_tests',
+            order: 8,
+            targetComponentCode: 'payment_card',
+          }),
+          expect.objectContaining({
+            code: 'e2e_tests',
+            order: 9,
+            status: 'completed',
+            targetComponentCode: 'payment_card',
+          }),
+        ],
+      }),
+    );
+    expect(runRepository.updateById).toHaveBeenNthCalledWith(
+      11,
+      expect.objectContaining({
         id: 'run-id-1',
         status: RUN_STATUS.COMPLETED,
       }),
@@ -933,6 +1135,7 @@ describe('RunOrchestratorUseCase', () => {
     const runComponentInterfacesStepUseCase =
       createRunComponentInterfacesStepUseCaseMock();
     const runUnitTestsStepUseCase = createRunUnitTestsStepUseCaseMock();
+    const runE2eTestsStepUseCase = createRunE2eTestsStepUseCaseMock();
     const error = new Error('Step execution failed', {
       cause: new Error('Output schema validation failed'),
     });
@@ -949,6 +1152,7 @@ describe('RunOrchestratorUseCase', () => {
       runUserFlowsStepUseCase as RunUserFlowsStepUseCase,
       runComponentInterfacesStepUseCase as RunComponentInterfacesStepUseCase,
       runUnitTestsStepUseCase as RunUnitTestsStepUseCase,
+      runE2eTestsStepUseCase as RunE2eTestsStepUseCase,
     );
 
     await expect(

@@ -151,8 +151,13 @@ export interface IRunUnitTestsArtifact {
 }
 
 export interface IRunE2eTestsArtifact {
-  integrationRisks: string[];
-  testCases: IRunTestCaseArtifact[];
+  coveredBehaviors: string[];
+  coveredComponentCodes: string[];
+  coveredFlowCodes: string[];
+  coveredStates: string[];
+  files: IRunGeneratedCodeFileArtifact[];
+  rootComponentCode: string;
+  rootComponentName: string;
 }
 
 export interface IRunGeneratedCodeFileArtifact {
