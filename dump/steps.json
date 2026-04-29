@@ -1,0 +1,383 @@
+[
+  {
+    "v": 1,
+    "name": "Parsing",
+    "purpose": "Extract a structured description of the component, its subcomponents, states, interactions, constraints, token references, and business context from the user input.",
+    "code": "parsing",
+    "promptCode": "parsing",
+    "promptVariant": "control",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "componentDescription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "figmaUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "screenshotUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "componentDescription",
+        "figmaUrl",
+        "screenshotUrl"
+      ]
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "$defs": {
+        "parsedComponent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "purpose": {
+              "type": "string",
+              "minLength": 1
+            },
+            "statePolicy": {
+              "enum": [
+                "dumb",
+                "smart"
+              ]
+            },
+            "type": {
+              "enum": [
+                "action",
+                "badge",
+                "button",
+                "card",
+                "field",
+                "file_upload",
+                "form",
+                "icon",
+                "modal",
+                "page",
+                "pagination",
+                "status",
+                "step_indicator",
+                "table",
+                "wizard"
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "name",
+            "parentCode",
+            "purpose",
+            "statePolicy",
+            "type"
+          ]
+        },
+        "parsedConstraint": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "componentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "enum": [
+                "file_size",
+                "file_type",
+                "masking",
+                "navigation",
+                "pagination",
+                "sorting",
+                "state"
+              ]
+            }
+          },
+          "required": [
+            "componentCode",
+            "description",
+            "type"
+          ]
+        },
+        "parsedContent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isRequired": {
+              "type": "boolean"
+            },
+            "kind": {
+              "enum": [
+                "action",
+                "column",
+                "field",
+                "icon",
+                "status",
+                "step"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "code",
+            "componentCode",
+            "description",
+            "isRequired",
+            "kind",
+            "name"
+          ]
+        },
+        "parsedInteraction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "targetComponentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "enum": [
+                "delete",
+                "drag_and_drop",
+                "next",
+                "open_details",
+                "paginate",
+                "pick_file",
+                "previous",
+                "select",
+                "sort"
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "componentCode",
+            "description",
+            "targetComponentCode",
+            "type"
+          ]
+        },
+        "parsedState": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isExplicit": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "code",
+            "componentCode",
+            "description",
+            "isExplicit",
+            "name"
+          ]
+        },
+        "parsedTokenReference": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "componentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "enum": [
+                "color",
+                "font",
+                "icon",
+                "radius",
+                "shadow",
+                "spacing",
+                "typography"
+              ]
+            }
+          },
+          "required": [
+            "componentCode",
+            "description",
+            "name",
+            "type"
+          ]
+        }
+      },
+      "properties": {
+        "businessContext": {
+          "type": "string",
+          "minLength": 1
+        },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/parsedComponent"
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/parsedConstraint"
+          }
+        },
+        "content": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/parsedContent"
+          }
+        },
+        "interactions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/parsedInteraction"
+          }
+        },
+        "rootComponentCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "specifiedStates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/parsedState"
+          }
+        },
+        "tokenReferences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/parsedTokenReference"
+          }
+        }
+      },
+      "required": [
+        "businessContext",
+        "components",
+        "constraints",
+        "content",
+        "interactions",
+        "rootComponentCode",
+        "specifiedStates",
+        "tokenReferences"
+      ]
+    },
+    "maxRetries": 2,
+    "validation": {
+      "validateInputSchema": true,
+      "validateOutputSchema": true
+    },
+    "isActive": true
+  }
+]
