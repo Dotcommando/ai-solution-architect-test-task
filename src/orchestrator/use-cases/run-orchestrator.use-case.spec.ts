@@ -1,3 +1,4 @@
+import { RunComponentInterfacesStepUseCase } from '../../component-interfaces/use-cases/run-component-interfaces-step.use-case';
 import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-analysis-step.use-case';
 import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
 import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
@@ -53,12 +54,22 @@ describe('RunOrchestratorUseCase', () => {
     };
   };
 
+  const createRunComponentInterfacesStepUseCaseMock = (): Pick<
+    RunComponentInterfacesStepUseCase,
+    'execute'
+  > => {
+    return {
+      execute: jest.fn(),
+    };
+  };
+
   it('creates a run, executes parsing, and persists progress', async () => {
     const runRepository = createRunRepositoryMock();
     const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();
     const runParsingStepUseCase = createRunParsingStepUseCaseMock();
     const runResolvingGapsStepUseCase = createRunResolvingGapsStepUseCaseMock();
     const runUserFlowsStepUseCase = createRunUserFlowsStepUseCaseMock();
+    const runComponentInterfacesStepUseCase = createRunComponentInterfacesStepUseCaseMock();
 
     runRepository.create = jest.fn().mockResolvedValue('run-id-1');
     runRepository.updateById = jest.fn().mockResolvedValue(null);
@@ -74,6 +85,14 @@ describe('RunOrchestratorUseCase', () => {
             purpose: 'Display a saved card.',
             statePolicy: 'smart',
             type: 'card',
+          },
+          {
+            code: 'card_brand_icon',
+            name: 'Card brand icon',
+            parentCode: 'payment_card',
+            purpose: 'Show the card brand.',
+            statePolicy: 'dumb',
+            type: 'icon',
           },
         ],
         constraints: [],
@@ -163,6 +182,55 @@ describe('RunOrchestratorUseCase', () => {
       },
       rawOutput: '{"flows":[{"code":"select_saved_card_fast_path"}]}',
     });
+    runComponentInterfacesStepUseCase.execute = jest
+      .fn()
+      .mockResolvedValueOnce({
+        attempts: 1,
+        output: {
+          accepts: [
+            {
+              description: 'Brand label rendered next to the icon for accessibility.',
+              name: 'brand_label',
+              required: true,
+              type: 'string',
+            },
+          ],
+          componentCode: 'card_brand_icon',
+          componentName: 'Card brand icon',
+          returns: [],
+        },
+        rawOutput: '{"componentCode":"card_brand_icon"}',
+      })
+      .mockResolvedValueOnce({
+        attempts: 1,
+        output: {
+          accepts: [
+            {
+              description: 'Saved card data used to render the card and decide selected state.',
+              name: 'card_summary',
+              required: true,
+              type: 'PaymentCardSummary',
+            },
+            {
+              description: 'Whether the saved card is currently selected.',
+              name: 'is_selected',
+              required: true,
+              type: 'boolean',
+            },
+          ],
+          componentCode: 'payment_card',
+          componentName: 'Payment card',
+          returns: [
+            {
+              description: 'Selection callback fired when the user selects the card.',
+              name: 'on_select',
+              required: true,
+              type: '(payload: SelectPaymentCardPayload) => void',
+            },
+          ],
+        },
+        rawOutput: '{"componentCode":"payment_card"}',
+      });
 
     const useCase = new RunOrchestratorUseCase(
       runRepository as RunRepository,
@@ -170,6 +238,7 @@ describe('RunOrchestratorUseCase', () => {
       runParsingStepUseCase as RunParsingStepUseCase,
       runResolvingGapsStepUseCase as RunResolvingGapsStepUseCase,
       runUserFlowsStepUseCase as RunUserFlowsStepUseCase,
+      runComponentInterfacesStepUseCase as RunComponentInterfacesStepUseCase,
     );
 
     await expect(
@@ -195,6 +264,14 @@ describe('RunOrchestratorUseCase', () => {
             purpose: 'Display a saved card.',
             statePolicy: 'smart',
             type: 'card',
+          },
+          {
+            code: 'card_brand_icon',
+            name: 'Card brand icon',
+            parentCode: 'payment_card',
+            purpose: 'Show the card brand.',
+            statePolicy: 'dumb',
+            type: 'icon',
           },
         ],
         constraints: [],
@@ -239,6 +316,66 @@ describe('RunOrchestratorUseCase', () => {
         ],
       }),
     });
+    expect(runComponentInterfacesStepUseCase.execute).toHaveBeenNthCalledWith(
+      1,
+      {
+        componentDescription: 'Payment card component.',
+        gapAnalysis: expect.objectContaining({
+          missingStates: ['Selected state is not explicitly defined.'],
+        }),
+        parsing: expect.objectContaining({
+          businessContext: 'merchant dashboard',
+        }),
+        resolvingGaps: expect.objectContaining({
+          decisions: [
+            expect.objectContaining({
+              code: 'define_selected_state',
+            }),
+          ],
+        }),
+        targetComponent: expect.objectContaining({
+          code: 'card_brand_icon',
+          statePolicy: 'dumb',
+        }),
+        userFlows: expect.objectContaining({
+          flows: expect.arrayContaining([
+            expect.objectContaining({
+              code: 'select_saved_card_fast_path',
+            }),
+          ]),
+        }),
+      },
+    );
+    expect(runComponentInterfacesStepUseCase.execute).toHaveBeenNthCalledWith(
+      2,
+      {
+        componentDescription: 'Payment card component.',
+        gapAnalysis: expect.objectContaining({
+          missingStates: ['Selected state is not explicitly defined.'],
+        }),
+        parsing: expect.objectContaining({
+          businessContext: 'merchant dashboard',
+        }),
+        resolvingGaps: expect.objectContaining({
+          decisions: [
+            expect.objectContaining({
+              code: 'define_selected_state',
+            }),
+          ],
+        }),
+        targetComponent: expect.objectContaining({
+          code: 'payment_card',
+          statePolicy: 'smart',
+        }),
+        userFlows: expect.objectContaining({
+          flows: expect.arrayContaining([
+            expect.objectContaining({
+              code: 'select_saved_card_fast_path',
+            }),
+          ]),
+        }),
+      },
+    );
     expect(runRepository.create).toHaveBeenCalledWith({
       input: {
         componentDescription: 'Payment card component.',
@@ -246,7 +383,7 @@ describe('RunOrchestratorUseCase', () => {
         screenshotUrl: null,
       },
     });
-    expect(runRepository.updateById).toHaveBeenCalledTimes(6);
+    expect(runRepository.updateById).toHaveBeenCalledTimes(8);
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -369,6 +506,84 @@ describe('RunOrchestratorUseCase', () => {
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
       6,
       expect.objectContaining({
+        artifacts: expect.objectContaining({
+          componentInterfaces: expect.objectContaining({
+            components: [
+              expect.objectContaining({
+                componentCode: 'card_brand_icon',
+              }),
+            ],
+          }),
+        }),
+        id: 'run-id-1',
+        steps: [
+          expect.objectContaining({
+            code: 'parsing',
+          }),
+          expect.objectContaining({
+            code: 'gap_analysis',
+          }),
+          expect.objectContaining({
+            code: 'resolving_gaps',
+          }),
+          expect.objectContaining({
+            code: 'user_flows',
+          }),
+          expect.objectContaining({
+            code: 'component_interfaces',
+            order: 5,
+            status: 'completed',
+            targetComponentCode: 'card_brand_icon',
+          }),
+        ],
+      }),
+    );
+    expect(runRepository.updateById).toHaveBeenNthCalledWith(
+      7,
+      expect.objectContaining({
+        artifacts: expect.objectContaining({
+          componentInterfaces: expect.objectContaining({
+            components: [
+              expect.objectContaining({
+                componentCode: 'card_brand_icon',
+              }),
+              expect.objectContaining({
+                componentCode: 'payment_card',
+              }),
+            ],
+          }),
+        }),
+        id: 'run-id-1',
+        steps: [
+          expect.objectContaining({
+            code: 'parsing',
+          }),
+          expect.objectContaining({
+            code: 'gap_analysis',
+          }),
+          expect.objectContaining({
+            code: 'resolving_gaps',
+          }),
+          expect.objectContaining({
+            code: 'user_flows',
+          }),
+          expect.objectContaining({
+            code: 'component_interfaces',
+            order: 5,
+            targetComponentCode: 'card_brand_icon',
+          }),
+          expect.objectContaining({
+            code: 'component_interfaces',
+            order: 6,
+            status: 'completed',
+            targetComponentCode: 'payment_card',
+          }),
+        ],
+      }),
+    );
+    expect(runRepository.updateById).toHaveBeenNthCalledWith(
+      8,
+      expect.objectContaining({
         id: 'run-id-1',
         status: RUN_STATUS.COMPLETED,
       }),
@@ -381,6 +596,7 @@ describe('RunOrchestratorUseCase', () => {
     const runParsingStepUseCase = createRunParsingStepUseCaseMock();
     const runResolvingGapsStepUseCase = createRunResolvingGapsStepUseCaseMock();
     const runUserFlowsStepUseCase = createRunUserFlowsStepUseCaseMock();
+    const runComponentInterfacesStepUseCase = createRunComponentInterfacesStepUseCaseMock();
     const error = new Error('Step execution failed', {
       cause: new Error('Output schema validation failed'),
     });
@@ -395,6 +611,7 @@ describe('RunOrchestratorUseCase', () => {
       runParsingStepUseCase as RunParsingStepUseCase,
       runResolvingGapsStepUseCase as RunResolvingGapsStepUseCase,
       runUserFlowsStepUseCase as RunUserFlowsStepUseCase,
+      runComponentInterfacesStepUseCase as RunComponentInterfacesStepUseCase,
     );
 
     await expect(

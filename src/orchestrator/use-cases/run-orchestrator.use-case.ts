@@ -1,4 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import { RunComponentInterfacesStepUseCase } from '../../component-interfaces/use-cases/run-component-interfaces-step.use-case';
+import {
+  IComponentInterfacesStepInput,
+  IComponentInterfacesStepOutput,
+} from '../../component-interfaces/types';
 import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-analysis-step.use-case';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
 import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
@@ -12,7 +17,11 @@ import {
   IRunStepTokenUsage,
   IRunTokenUsageTotals,
 } from '../../run/types';
-import { UI_COMPONENT_TYPE } from '../../types';
+import {
+  COMPONENT_STATE_POLICY,
+  IParsedComponent,
+  UI_COMPONENT_TYPE,
+} from '../../types';
 import { RunUserFlowsStepUseCase } from '../../user-flows/use-cases/run-user-flows-step.use-case';
 import { IUserFlowsStepOutput } from '../../user-flows/types';
 import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
@@ -26,6 +35,7 @@ export class RunOrchestratorUseCase {
     private readonly runParsingStepUseCase: RunParsingStepUseCase,
     private readonly runResolvingGapsStepUseCase: RunResolvingGapsStepUseCase,
     private readonly runUserFlowsStepUseCase: RunUserFlowsStepUseCase,
+    private readonly runComponentInterfacesStepUseCase: RunComponentInterfacesStepUseCase,
   ) {}
 
   async run(
@@ -133,7 +143,48 @@ export class RunOrchestratorUseCase {
         stepsWithUserFlows,
       );
 
-      // await this.runComponentInterfacesStage(runId);
+      const orderedComponents = this.orderComponentsForInterfaces(
+        parsingResult.output.components,
+      );
+      let artifactsWithComponentInterfaces = artifactsWithUserFlows;
+      let stepsWithComponentInterfaces = stepsWithUserFlows;
+
+      for (const targetComponent of orderedComponents) {
+        const componentInterfacesInput = this.buildComponentInterfacesStageInput(
+          request,
+          parsingResult.output,
+          gapAnalysisResult.output,
+          resolvingGapsResult.output,
+          targetComponent,
+          userFlowsResult.output,
+        );
+        const componentInterfacesResult = await this.runComponentInterfacesStage(
+          componentInterfacesInput,
+        );
+
+        artifactsWithComponentInterfaces = this.buildArtifactsWithComponentInterface(
+          artifactsWithComponentInterfaces,
+          componentInterfacesResult.output,
+        );
+        stepsWithComponentInterfaces = this.appendStepReport(
+          stepsWithComponentInterfaces,
+          this.buildComponentInterfacesStepReport(
+            componentInterfacesInput,
+            componentInterfacesResult.attempts,
+            componentInterfacesResult.output,
+            componentInterfacesResult.rawOutput,
+            stepsWithComponentInterfaces.length + 1,
+          ),
+        );
+
+        await this.saveComponentInterfacesStageResult(
+          runId,
+          artifactsWithComponentInterfaces,
+          parsingDerivedData,
+          stepsWithComponentInterfaces,
+        );
+      }
+
       // await this.runUnitTestsStage(runId);
       // await this.runE2eTestsStage(runId);
       // await this.runComponentGenerationStage(runId);
@@ -222,6 +273,12 @@ export class RunOrchestratorUseCase {
     });
   }
 
+  private async runComponentInterfacesStage(
+    input: IComponentInterfacesStepInput,
+  ): ReturnType<RunComponentInterfacesStepUseCase['execute']> {
+    return this.runComponentInterfacesStepUseCase.execute(input);
+  }
+
   private buildArtifactsFromParsing(
     parsingOutput: IRunOrchestratorResponse['parsing'],
   ): IRunArtifacts {
@@ -265,6 +322,23 @@ export class RunOrchestratorUseCase {
     return {
       ...artifacts,
       userFlows: userFlowsOutput,
+    };
+  }
+
+  private buildArtifactsWithComponentInterface(
+    artifacts: IRunArtifacts,
+    componentInterfaceOutput: IComponentInterfacesStepOutput,
+  ): IRunArtifacts {
+    const existingComponents = artifacts.componentInterfaces?.components ?? [];
+
+    return {
+      ...artifacts,
+      componentInterfaces: {
+        components: [
+          ...existingComponents,
+          componentInterfaceOutput,
+        ],
+      },
     };
   }
 
@@ -440,6 +514,76 @@ export class RunOrchestratorUseCase {
     };
   }
 
+  private buildComponentInterfacesStepReport(
+    input: IComponentInterfacesStepInput,
+    attempts: number,
+    output: IComponentInterfacesStepOutput,
+    rawOutput: string,
+    order: number,
+  ): IRunStepReport {
+    const now = new Date();
+
+    return {
+      attempts,
+      code: RUN_STEP_CODE.COMPONENT_INTERFACES,
+      completedAt: now,
+      durationMs: null,
+      errorDetails: null,
+      errorMessage: null,
+      inputJson: JSON.stringify(input),
+      model: {
+        model: null,
+        provider: 'openai',
+      },
+      order,
+      outputJson: this.serializeOutputJson(output),
+      prompt: {
+        code: 'component_interfaces',
+        variant: 'control',
+        version: null,
+      },
+      rawOutput,
+      startedAt: now,
+      status: RUN_STEP_STATUS.COMPLETED,
+      targetComponentCode: output.componentCode,
+      tokenUsage: this.buildEmptyStepTokenUsage(),
+    };
+  }
+
+  private buildComponentInterfacesStageInput(
+    request: IRunOrchestratorRequest,
+    parsing: IRunOrchestratorResponse['parsing'],
+    gapAnalysis: IGapAnalysisStepOutput,
+    resolvingGaps: IResolvingGapsStepOutput,
+    targetComponent: IParsedComponent,
+    userFlows: IUserFlowsStepOutput,
+  ): IComponentInterfacesStepInput {
+    return {
+      componentDescription: request.componentDescription,
+      gapAnalysis,
+      parsing,
+      resolvingGaps,
+      targetComponent,
+      userFlows,
+    };
+  }
+
+  private orderComponentsForInterfaces(
+    components: IParsedComponent[],
+  ): IParsedComponent[] {
+    const dumbComponents = components.filter((component) => {
+      return component.statePolicy === COMPONENT_STATE_POLICY.DUMB;
+    });
+    const smartComponents = components.filter((component) => {
+      return component.statePolicy === COMPONENT_STATE_POLICY.SMART;
+    });
+
+    return [
+      ...dumbComponents,
+      ...smartComponents,
+    ];
+  }
+
   private appendStepReport(
     steps: IRunStepReport[],
     stepReport: IRunStepReport,
@@ -481,6 +625,21 @@ export class RunOrchestratorUseCase {
   }
 
   private async saveUserFlowsStageResult(
+    runId: string,
+    artifacts: IRunArtifacts,
+    derivedData: IRunDerivedData,
+    steps: IRunStepReport[],
+  ): Promise<void> {
+    await this.runRepository.updateById({
+      artifacts,
+      derivedData,
+      id: runId,
+      steps,
+      tokenUsageTotals: this.buildTokenUsageTotals(steps),
+    });
+  }
+
+  private async saveComponentInterfacesStageResult(
     runId: string,
     artifacts: IRunArtifacts,
     derivedData: IRunDerivedData,

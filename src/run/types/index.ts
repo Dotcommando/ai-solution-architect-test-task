@@ -133,8 +133,21 @@ export interface IRunTestCaseArtifact {
   title: string;
 }
 
+export interface IRunUnitTestFileArtifact {
+  content: string;
+  filename: string;
+}
+
+export interface IRunUnitTestComponentArtifact {
+  componentCode: string;
+  componentName: string;
+  coveredBehaviors: string[];
+  coveredStates: string[];
+  files: IRunUnitTestFileArtifact[];
+}
+
 export interface IRunUnitTestsArtifact {
-  testCases: IRunTestCaseArtifact[];
+  components: IRunUnitTestComponentArtifact[];
 }
 
 export interface IRunE2eTestsArtifact {
