@@ -13,6 +13,8 @@ import {
   IRunTokenUsageTotals,
 } from '../../run/types';
 import { UI_COMPONENT_TYPE } from '../../types';
+import { RunUserFlowsStepUseCase } from '../../user-flows/use-cases/run-user-flows-step.use-case';
+import { IUserFlowsStepOutput } from '../../user-flows/types';
 import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
 import type { IRunOrchestratorRequest, IRunOrchestratorResponse } from '../types';
 
@@ -23,6 +25,7 @@ export class RunOrchestratorUseCase {
     private readonly runGapAnalysisStepUseCase: RunGapAnalysisStepUseCase,
     private readonly runParsingStepUseCase: RunParsingStepUseCase,
     private readonly runResolvingGapsStepUseCase: RunResolvingGapsStepUseCase,
+    private readonly runUserFlowsStepUseCase: RunUserFlowsStepUseCase,
   ) {}
 
   async run(
@@ -103,7 +106,33 @@ export class RunOrchestratorUseCase {
         stepsWithResolvingGaps,
       );
 
-      // await this.runUserFlowsStage(runId);
+      const userFlowsResult = await this.runUserFlowsStage(
+        request,
+        parsingResult.output,
+        gapAnalysisResult.output,
+        resolvingGapsResult.output,
+      );
+      const artifactsWithUserFlows = this.buildArtifactsWithUserFlows(
+        artifactsWithResolvingGaps,
+        userFlowsResult.output,
+      );
+      const stepsWithUserFlows = this.appendStepReport(
+        stepsWithResolvingGaps,
+        this.buildUserFlowsStepReport(
+          request,
+          userFlowsResult.attempts,
+          userFlowsResult.output,
+          userFlowsResult.rawOutput,
+        ),
+      );
+
+      await this.saveUserFlowsStageResult(
+        runId,
+        artifactsWithUserFlows,
+        parsingDerivedData,
+        stepsWithUserFlows,
+      );
+
       // await this.runComponentInterfacesStage(runId);
       // await this.runUnitTestsStage(runId);
       // await this.runE2eTestsStage(runId);
@@ -179,6 +208,20 @@ export class RunOrchestratorUseCase {
     });
   }
 
+  private async runUserFlowsStage(
+    request: IRunOrchestratorRequest,
+    parsing: IRunOrchestratorResponse['parsing'],
+    gapAnalysis: IGapAnalysisStepOutput,
+    resolvingGaps: IResolvingGapsStepOutput,
+  ): ReturnType<RunUserFlowsStepUseCase['execute']> {
+    return this.runUserFlowsStepUseCase.execute({
+      componentDescription: request.componentDescription,
+      gapAnalysis,
+      parsing,
+      resolvingGaps,
+    });
+  }
+
   private buildArtifactsFromParsing(
     parsingOutput: IRunOrchestratorResponse['parsing'],
   ): IRunArtifacts {
@@ -212,6 +255,16 @@ export class RunOrchestratorUseCase {
     return {
       ...artifacts,
       resolvingGaps: resolvingGapsOutput,
+    };
+  }
+
+  private buildArtifactsWithUserFlows(
+    artifacts: IRunArtifacts,
+    userFlowsOutput: IUserFlowsStepOutput,
+  ): IRunArtifacts {
+    return {
+      ...artifacts,
+      userFlows: userFlowsOutput,
     };
   }
 
@@ -350,6 +403,43 @@ export class RunOrchestratorUseCase {
     };
   }
 
+  private buildUserFlowsStepReport(
+    request: IRunOrchestratorRequest,
+    attempts: number,
+    output: IUserFlowsStepOutput,
+    rawOutput: string,
+  ): IRunStepReport {
+    const now = new Date();
+
+    return {
+      attempts,
+      code: RUN_STEP_CODE.USER_FLOWS,
+      completedAt: now,
+      durationMs: null,
+      errorDetails: null,
+      errorMessage: null,
+      inputJson: JSON.stringify({
+        componentDescription: request.componentDescription,
+      }),
+      model: {
+        model: null,
+        provider: 'openai',
+      },
+      order: 4,
+      outputJson: this.serializeOutputJson(output),
+      prompt: {
+        code: 'user_flows',
+        variant: 'control',
+        version: null,
+      },
+      rawOutput,
+      startedAt: now,
+      status: RUN_STEP_STATUS.COMPLETED,
+      targetComponentCode: null,
+      tokenUsage: this.buildEmptyStepTokenUsage(),
+    };
+  }
+
   private appendStepReport(
     steps: IRunStepReport[],
     stepReport: IRunStepReport,
@@ -376,6 +466,21 @@ export class RunOrchestratorUseCase {
   }
 
   private async saveResolvingGapsStageResult(
+    runId: string,
+    artifacts: IRunArtifacts,
+    derivedData: IRunDerivedData,
+    steps: IRunStepReport[],
+  ): Promise<void> {
+    await this.runRepository.updateById({
+      artifacts,
+      derivedData,
+      id: runId,
+      steps,
+      tokenUsageTotals: this.buildTokenUsageTotals(steps),
+    });
+  }
+
+  private async saveUserFlowsStageResult(
     runId: string,
     artifacts: IRunArtifacts,
     derivedData: IRunDerivedData,

@@ -1236,5 +1236,243 @@
       "validateOutputSchema": true
     },
     "isActive": true
+  },
+  {
+    "v": 1,
+    "name": "User Flows",
+    "purpose": "Define realistic happy and unhappy user flows that reflect the parsed structure, identified gaps, and explicit implementation decisions.",
+    "code": "user_flows",
+    "promptCode": "user_flows",
+    "promptVariant": "control",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "componentDescription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gapAnalysis": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "accessibilityGaps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "missingStates": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "recommendations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "responsiveGaps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "accessibilityGaps",
+            "missingStates",
+            "recommendations",
+            "responsiveGaps"
+          ]
+        },
+        "parsing": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "businessContext",
+            "components",
+            "constraints",
+            "content",
+            "interactions",
+            "rootComponentCode",
+            "specifiedStates",
+            "tokenReferences"
+          ]
+        },
+        "resolvingGaps": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "affectedComponentCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "decision": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sourceGap": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "affectedComponentCodes",
+                  "code",
+                  "decision",
+                  "rationale",
+                  "sourceGap"
+                ]
+              }
+            }
+          },
+          "required": [
+            "decisions"
+          ]
+        }
+      },
+      "required": [
+        "componentDescription",
+        "gapAnalysis",
+        "parsing",
+        "resolvingGaps"
+      ]
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "$defs": {
+        "userFlowStep": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "type": "string",
+              "minLength": 1
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expectedResult": {
+              "type": "string",
+              "minLength": 1
+            },
+            "inputData": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "code",
+            "componentCode",
+            "expectedResult",
+            "inputData"
+          ]
+        },
+        "userFlow": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "completionCriteria": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "enum": [
+                "exploratory_happy",
+                "shortest_happy",
+                "unhappy_invalid_input"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/userFlowStep"
+              }
+            }
+          },
+          "required": [
+            "code",
+            "completionCriteria",
+            "kind",
+            "name",
+            "steps"
+          ]
+        }
+      },
+      "properties": {
+        "flows": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "$ref": "#/$defs/userFlow"
+          }
+        }
+      },
+      "required": [
+        "flows"
+      ]
+    },
+    "maxRetries": 2,
+    "validation": {
+      "validateInputSchema": true,
+      "validateOutputSchema": true
+    },
+    "isActive": true
   }
 ]

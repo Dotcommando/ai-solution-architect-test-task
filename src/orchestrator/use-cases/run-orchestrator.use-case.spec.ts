@@ -3,6 +3,7 @@ import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.
 import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
 import { RUN_STATUS } from '../../run/constants';
 import { RunRepository } from '../../run/repositories/run.repository';
+import { RunUserFlowsStepUseCase } from '../../user-flows/use-cases/run-user-flows-step.use-case';
 import { RunOrchestratorUseCase } from './run-orchestrator.use-case';
 
 describe('RunOrchestratorUseCase', () => {
@@ -43,11 +44,21 @@ describe('RunOrchestratorUseCase', () => {
     };
   };
 
+  const createRunUserFlowsStepUseCaseMock = (): Pick<
+    RunUserFlowsStepUseCase,
+    'execute'
+  > => {
+    return {
+      execute: jest.fn(),
+    };
+  };
+
   it('creates a run, executes parsing, and persists progress', async () => {
     const runRepository = createRunRepositoryMock();
     const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();
     const runParsingStepUseCase = createRunParsingStepUseCaseMock();
     const runResolvingGapsStepUseCase = createRunResolvingGapsStepUseCaseMock();
+    const runUserFlowsStepUseCase = createRunUserFlowsStepUseCaseMock();
 
     runRepository.create = jest.fn().mockResolvedValue('run-id-1');
     runRepository.updateById = jest.fn().mockResolvedValue(null);
@@ -99,12 +110,66 @@ describe('RunOrchestratorUseCase', () => {
       },
       rawOutput: '{"decisions":[{"code":"define_selected_state"}]}',
     });
+    runUserFlowsStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        flows: [
+          {
+            code: 'select_saved_card_fast_path',
+            completionCriteria: 'A saved card is selected without errors.',
+            kind: 'shortest_happy',
+            name: 'Select saved card quickly',
+            steps: [
+              {
+                action: 'User selects the saved payment card.',
+                code: 'select_card',
+                componentCode: 'payment_card',
+                expectedResult: 'The card enters the selected state.',
+                inputData: null,
+              },
+            ],
+          },
+          {
+            code: 'review_then_select_card',
+            completionCriteria: 'A saved card is selected after review and exploration.',
+            kind: 'exploratory_happy',
+            name: 'Review and then select card',
+            steps: [
+              {
+                action: 'User reviews card details before selecting it.',
+                code: 'review_card_details',
+                componentCode: 'payment_card',
+                expectedResult: 'Card details remain visible and unchanged.',
+                inputData: null,
+              },
+            ],
+          },
+          {
+            code: 'invalid_delete_attempt',
+            completionCriteria: 'The invalid action is rejected and the user can recover.',
+            kind: 'unhappy_invalid_input',
+            name: 'Invalid delete attempt',
+            steps: [
+              {
+                action: 'User attempts a destructive action without satisfying the required confirmation condition.',
+                code: 'attempt_delete_without_confirmation',
+                componentCode: 'payment_card',
+                expectedResult: 'The UI blocks the action and shows recovery guidance.',
+                inputData: 'Delete requested without confirmation',
+              },
+            ],
+          },
+        ],
+      },
+      rawOutput: '{"flows":[{"code":"select_saved_card_fast_path"}]}',
+    });
 
     const useCase = new RunOrchestratorUseCase(
       runRepository as RunRepository,
       runGapAnalysisStepUseCase as RunGapAnalysisStepUseCase,
       runParsingStepUseCase as RunParsingStepUseCase,
       runResolvingGapsStepUseCase as RunResolvingGapsStepUseCase,
+      runUserFlowsStepUseCase as RunUserFlowsStepUseCase,
     );
 
     await expect(
@@ -158,6 +223,22 @@ describe('RunOrchestratorUseCase', () => {
         businessContext: 'merchant dashboard',
       }),
     });
+    expect(runUserFlowsStepUseCase.execute).toHaveBeenCalledWith({
+      componentDescription: 'Payment card component.',
+      gapAnalysis: expect.objectContaining({
+        missingStates: ['Selected state is not explicitly defined.'],
+      }),
+      parsing: expect.objectContaining({
+        businessContext: 'merchant dashboard',
+      }),
+      resolvingGaps: expect.objectContaining({
+        decisions: [
+          expect.objectContaining({
+            code: 'define_selected_state',
+          }),
+        ],
+      }),
+    });
     expect(runRepository.create).toHaveBeenCalledWith({
       input: {
         componentDescription: 'Payment card component.',
@@ -165,7 +246,7 @@ describe('RunOrchestratorUseCase', () => {
         screenshotUrl: null,
       },
     });
-    expect(runRepository.updateById).toHaveBeenCalledTimes(5);
+    expect(runRepository.updateById).toHaveBeenCalledTimes(6);
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -251,6 +332,43 @@ describe('RunOrchestratorUseCase', () => {
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
       5,
       expect.objectContaining({
+        artifacts: expect.objectContaining({
+          userFlows: expect.objectContaining({
+            flows: expect.arrayContaining([
+              expect.objectContaining({
+                code: 'select_saved_card_fast_path',
+              }),
+            ]),
+          }),
+          resolvingGaps: expect.objectContaining({
+            decisions: [
+              expect.objectContaining({
+                code: 'define_selected_state',
+              }),
+            ],
+          }),
+        }),
+        id: 'run-id-1',
+        steps: [
+          expect.objectContaining({
+            code: 'parsing',
+          }),
+          expect.objectContaining({
+            code: 'gap_analysis',
+          }),
+          expect.objectContaining({
+            code: 'resolving_gaps',
+          }),
+          expect.objectContaining({
+            code: 'user_flows',
+            status: 'completed',
+          }),
+        ],
+      }),
+    );
+    expect(runRepository.updateById).toHaveBeenNthCalledWith(
+      6,
+      expect.objectContaining({
         id: 'run-id-1',
         status: RUN_STATUS.COMPLETED,
       }),
@@ -262,6 +380,7 @@ describe('RunOrchestratorUseCase', () => {
     const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();
     const runParsingStepUseCase = createRunParsingStepUseCaseMock();
     const runResolvingGapsStepUseCase = createRunResolvingGapsStepUseCaseMock();
+    const runUserFlowsStepUseCase = createRunUserFlowsStepUseCaseMock();
     const error = new Error('Step execution failed', {
       cause: new Error('Output schema validation failed'),
     });
@@ -275,6 +394,7 @@ describe('RunOrchestratorUseCase', () => {
       runGapAnalysisStepUseCase as RunGapAnalysisStepUseCase,
       runParsingStepUseCase as RunParsingStepUseCase,
       runResolvingGapsStepUseCase as RunResolvingGapsStepUseCase,
+      runUserFlowsStepUseCase as RunUserFlowsStepUseCase,
     );
 
     await expect(
