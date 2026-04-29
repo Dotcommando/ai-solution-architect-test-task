@@ -69,6 +69,7 @@ The implementation must use the following ordered stages:
 - Keep constants and enums inside feature-local `constants/` directories.
 - Keep interfaces and other type definitions inside feature-local `types/` directories.
 - Prefer small, explicit modules over shared generic abstractions unless reuse is already proven.
+- For Mongoose update operations, do not use the deprecated `new: true` option. Use `returnDocument: 'after'` instead.
 
 ## TypeScript Rules
 

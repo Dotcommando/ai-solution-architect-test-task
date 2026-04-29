@@ -163,7 +163,7 @@ describe('RunRepository', () => {
         status: RUN_STATUS.FAILED,
       },
       {
-        new: true,
+        returnDocument: 'after',
         runValidators: true,
       },
     );

@@ -53,7 +53,7 @@ export class RunRepository {
         request.id,
         updatePayload,
         {
-          new: true,
+          returnDocument: 'after',
           runValidators: true,
         },
       )

@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-analysis-step.use-case';
+import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
 import { RUN_FINAL_COMPONENT_TYPE, RUN_STATUS, RUN_STEP_CODE, RUN_STEP_STATUS } from '../../run/constants';
 import { RunRepository } from '../../run/repositories/run.repository';
 import {
@@ -16,6 +18,7 @@ import type { IRunOrchestratorRequest, IRunOrchestratorResponse } from '../types
 export class RunOrchestratorUseCase {
   constructor(
     private readonly runRepository: RunRepository,
+    private readonly runGapAnalysisStepUseCase: RunGapAnalysisStepUseCase,
     private readonly runParsingStepUseCase: RunParsingStepUseCase,
   ) {}
 
@@ -45,7 +48,30 @@ export class RunOrchestratorUseCase {
         [parsingStepReport],
       );
 
-      // await this.runGapAnalysisStage(runId);
+      const gapAnalysisResult = await this.runGapAnalysisStage(
+        request,
+        parsingResult.output,
+      );
+      const artifactsWithGapAnalysis = this.buildArtifactsWithGapAnalysis(
+        parsingArtifacts,
+        gapAnalysisResult.output,
+      );
+      const stepsWithGapAnalysis = this.appendStepReport(
+        [parsingStepReport],
+        this.buildGapAnalysisStepReport(
+          request,
+          gapAnalysisResult.attempts,
+          gapAnalysisResult.rawOutput,
+        ),
+      );
+
+      await this.saveGapAnalysisStageResult(
+        runId,
+        artifactsWithGapAnalysis,
+        parsingDerivedData,
+        stepsWithGapAnalysis,
+      );
+
       // await this.runResolvingGapsStage(runId);
       // await this.runUserFlowsStage(runId);
       // await this.runComponentInterfacesStage(runId);
@@ -101,6 +127,16 @@ export class RunOrchestratorUseCase {
     });
   }
 
+  private async runGapAnalysisStage(
+    request: IRunOrchestratorRequest,
+    parsing: IRunOrchestratorResponse['parsing'],
+  ): ReturnType<RunGapAnalysisStepUseCase['execute']> {
+    return this.runGapAnalysisStepUseCase.execute({
+      componentDescription: request.componentDescription,
+      parsing,
+    });
+  }
+
   private buildArtifactsFromParsing(
     parsingOutput: IRunOrchestratorResponse['parsing'],
   ): IRunArtifacts {
@@ -114,6 +150,16 @@ export class RunOrchestratorUseCase {
       unitTests: null,
       userFlows: null,
       validation: null,
+    };
+  }
+
+  private buildArtifactsWithGapAnalysis(
+    artifacts: IRunArtifacts,
+    gapAnalysisOutput: IGapAnalysisStepOutput,
+  ): IRunArtifacts {
+    return {
+      ...artifacts,
+      gapAnalysis: gapAnalysisOutput,
     };
   }
 
@@ -177,7 +223,68 @@ export class RunOrchestratorUseCase {
     };
   }
 
+  private buildGapAnalysisStepReport(
+    request: IRunOrchestratorRequest,
+    attempts: number,
+    rawOutput: string,
+  ): IRunStepReport {
+    const now = new Date();
+
+    return {
+      attempts,
+      code: RUN_STEP_CODE.GAP_ANALYSIS,
+      completedAt: now,
+      durationMs: null,
+      errorDetails: null,
+      errorMessage: null,
+      inputJson: JSON.stringify({
+        componentDescription: request.componentDescription,
+      }),
+      model: {
+        model: null,
+        provider: 'openai',
+      },
+      order: 2,
+      outputJson: rawOutput,
+      prompt: {
+        code: 'gap_analysis',
+        variant: 'control',
+        version: null,
+      },
+      rawOutput,
+      startedAt: now,
+      status: RUN_STEP_STATUS.COMPLETED,
+      targetComponentCode: null,
+      tokenUsage: this.buildEmptyStepTokenUsage(),
+    };
+  }
+
+  private appendStepReport(
+    steps: IRunStepReport[],
+    stepReport: IRunStepReport,
+  ): IRunStepReport[] {
+    return [
+      ...steps,
+      stepReport,
+    ];
+  }
+
   private async saveParsingStageResult(
+    runId: string,
+    artifacts: IRunArtifacts,
+    derivedData: IRunDerivedData,
+    steps: IRunStepReport[],
+  ): Promise<void> {
+    await this.runRepository.updateById({
+      artifacts,
+      derivedData,
+      id: runId,
+      steps,
+      tokenUsageTotals: this.buildTokenUsageTotals(steps),
+    });
+  }
+
+  private async saveGapAnalysisStageResult(
     runId: string,
     artifacts: IRunArtifacts,
     derivedData: IRunDerivedData,
