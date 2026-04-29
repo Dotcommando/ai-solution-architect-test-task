@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApplicationExceptionFilter } from './common/filters/application-exception.filter';
 import { ParsingModule } from './parsing/parsing.module';
+import { RunModule } from './run/run.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { ParsingModule } from './parsing/parsing.module';
       },
     }),
     ParsingModule,
+    RunModule,
   ],
   controllers: [AppController],
   providers: [
