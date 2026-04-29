@@ -473,22 +473,29 @@ export function buildRunResult(
   artifacts: IRunArtifacts,
   derivedData: IRunDerivedData,
 ): IRunResult {
+  const parsing = artifacts.parsing;
+  const gapAnalysis = artifacts.gapAnalysis;
+  const generatedCode = artifacts.generatedCode;
+  const validation = artifacts.validation;
+  const rootComponentName = derivedData.rootComponentName;
+  const rootComponentType = derivedData.rootComponentType;
+
   if (
-    artifacts.parsing === null ||
-    artifacts.gapAnalysis === null ||
-    artifacts.generatedCode === null ||
-    artifacts.validation === null ||
-    derivedData.rootComponentName === null ||
-    derivedData.rootComponentType === null
+    parsing === null ||
+    gapAnalysis === null ||
+    generatedCode === null ||
+    validation === null ||
+    rootComponentName === null ||
+    rootComponentType === null
   ) {
     throw new Error('Run result cannot be built from incomplete artifacts');
   }
 
   return {
     component: {
-      business_context: artifacts.parsing.businessContext,
-      name: derivedData.rootComponentName,
-      type: derivedData.rootComponentType,
+      business_context: parsing.businessContext,
+      name: rootComponentName,
+      type: rootComponentType,
     },
     extraction: {
       constraints: derivedData.constraintDescriptions,
@@ -496,23 +503,94 @@ export function buildRunResult(
       tokens_referenced: derivedData.referencedTokenNames,
     },
     gap_analysis: {
-      accessibility_gaps: artifacts.gapAnalysis.accessibilityGaps,
-      missing_states: artifacts.gapAnalysis.missingStates,
-      recommendations: artifacts.gapAnalysis.recommendations,
-      responsive_gaps: artifacts.gapAnalysis.responsiveGaps,
+      accessibility_gaps: gapAnalysis.accessibilityGaps,
+      missing_states: gapAnalysis.missingStates,
+      recommendations: gapAnalysis.recommendations,
+      responsive_gaps: gapAnalysis.responsiveGaps,
     },
     generated_code: {
-      files: artifacts.generatedCode.files,
-      framework: artifacts.generatedCode.framework,
-      states_covered: artifacts.generatedCode.statesCovered,
-      tokens_used: artifacts.generatedCode.tokensUsed,
+      files: generatedCode.files,
+      framework: generatedCode.framework,
+      states_covered: generatedCode.statesCovered,
+      tokens_used: generatedCode.tokensUsed,
     },
     validation: {
-      accessibility_score: artifacts.validation.accessibilityScore,
-      hallucinations_caught: artifacts.validation.hallucinationsCaught,
-      issues_found: artifacts.validation.issuesFound,
-      states_coverage: artifacts.validation.stateCoverage.label,
-      token_compliance: artifacts.validation.tokenCompliance,
+      accessibility_score: validation.accessibilityScore,
+      hallucinations_caught: validation.hallucinationsCaught,
+      issues_found: validation.issuesFound,
+      states_coverage: validation.stateCoverage.label,
+      token_compliance: validation.tokenCompliance,
+    },
+  };
+}
+
+export function canBuildRunResult(
+  artifacts: IRunArtifacts,
+  derivedData: IRunDerivedData,
+): boolean {
+  return !(
+    artifacts.parsing === null ||
+    artifacts.gapAnalysis === null ||
+    artifacts.generatedCode === null ||
+    artifacts.validation === null ||
+    derivedData.rootComponentName === null ||
+    derivedData.rootComponentType === null
+  );
+}
+
+export function buildInterruptedRunResult(
+  artifacts: IRunArtifacts,
+  derivedData: IRunDerivedData,
+  issueMessage: string,
+): IRunResult {
+  if (canBuildRunResult(artifacts, derivedData)) {
+    const result = buildRunResult(artifacts, derivedData);
+
+    return {
+      ...result,
+      validation: {
+        ...result.validation,
+        issues_found: deduplicateStrings([
+          ...result.validation.issues_found,
+          issueMessage,
+        ]),
+      },
+    };
+  }
+
+  return {
+    component: {
+      business_context: artifacts.parsing?.businessContext ?? '',
+      name: derivedData.rootComponentName ?? 'Unknown component',
+      type: derivedData.rootComponentType ?? RUN_FINAL_COMPONENT_TYPE.CARD,
+    },
+    extraction: {
+      constraints: derivedData.constraintDescriptions,
+      specified_states: derivedData.specifiedStateNames,
+      tokens_referenced: derivedData.referencedTokenNames,
+    },
+    gap_analysis: {
+      accessibility_gaps: artifacts.gapAnalysis?.accessibilityGaps ?? [],
+      missing_states: artifacts.gapAnalysis?.missingStates ?? [],
+      recommendations: artifacts.gapAnalysis?.recommendations ?? [],
+      responsive_gaps: artifacts.gapAnalysis?.responsiveGaps ?? [],
+    },
+    generated_code: {
+      files: artifacts.generatedCode?.files ?? [],
+      framework: artifacts.generatedCode?.framework ?? '',
+      states_covered: artifacts.generatedCode?.statesCovered ?? [],
+      tokens_used: artifacts.generatedCode?.tokensUsed ?? [],
+    },
+    validation: {
+      accessibility_score:
+        artifacts.validation?.accessibilityScore ?? 'not_run',
+      hallucinations_caught: artifacts.validation?.hallucinationsCaught ?? [],
+      issues_found: deduplicateStrings([
+        ...(artifacts.validation?.issuesFound ?? []),
+        issueMessage,
+      ]),
+      states_coverage: artifacts.validation?.stateCoverage.label ?? '0/0',
+      token_compliance: artifacts.validation?.tokenCompliance ?? true,
     },
   };
 }
@@ -799,6 +877,22 @@ export function buildRunCompletedUpdate(runId: string): {
     completedAt: new Date(),
     id: runId,
     status: RUN_STATUS.COMPLETED,
+  };
+}
+
+export function buildRunInterruptedUpdate(runId: string): {
+  completedAt: Date;
+  errorDetails: null;
+  errorMessage: null;
+  id: string;
+  status: RUN_STATUS;
+} {
+  return {
+    completedAt: new Date(),
+    errorDetails: null,
+    errorMessage: null,
+    id: runId,
+    status: RUN_STATUS.INTERRUPTED,
   };
 }
 

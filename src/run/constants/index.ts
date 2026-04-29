@@ -3,6 +3,7 @@ export const RUN_COLLECTION_NAME = 'runs';
 export enum RUN_STATUS {
   COMPLETED = 'completed',
   FAILED = 'failed',
+  INTERRUPTED = 'interrupted',
   PENDING = 'pending',
   RUNNING = 'running',
 }

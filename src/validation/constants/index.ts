@@ -22,7 +22,7 @@ export const DEFAULT_VALIDATION_SYSTEM_PROMPT = [
   '8. Treat `deterministicSummary.requiredStates`, `coveredStates`, and `missingStates` as canonical state codes from `canonicalStateModel.states[].code`.',
   '9. Use the generated code, component interfaces, unit tests, e2e tests, parsing result, gap analysis, and resolving-gaps decisions to assess accessibility basics and contract compatibility.',
   '10. `accessibilityScore` should be a short human-readable score or rating such as `basic_pass`, `needs_attention`, or `partial_pass`.',
-  '11. `contractCompatibilityIssues` should list concrete integration or interface mismatches only when they are justified by the provided artifacts.',
+  '11. `contractCompatibilityIssues` should list concrete integration or interface mismatches only when they are justified by the provided artifacts. Missing callback wiring, unused required callbacks, or no-op required callback handlers are valid deterministic compatibility issues.',
   '12. `affectedComponentCodes`, `isRegenerationRequired`, and `regenerationReasons` must be consistent with the validation findings that justify selective regeneration.',
   '13. `issuesFound` must include important validation problems. If deterministicSummary already indicates missing states or hallucinated tokens, include those problems in `issuesFound`.',
   '14. Do not invent missing files, states, tokens, or component contracts.',

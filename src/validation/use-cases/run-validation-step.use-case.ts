@@ -15,6 +15,7 @@ import {
 } from '../types';
 import {
   buildDetectedHallucinations,
+  buildDeterministicContractCompatibilityIssues,
   buildDeterministicValidationIssues,
   buildEmptyContractCompatibilityIssues,
   buildRegenerationReasons,
@@ -79,6 +80,11 @@ export class RunValidationStepUseCase {
         totalCount: input.deterministicSummary.stateCoverage.totalCount,
       },
     );
+    const deterministicContractCompatibilityIssues =
+      buildDeterministicContractCompatibilityIssues(
+        request.componentInterfaces,
+        request.generatedCode,
+      );
 
     return {
       attempts: result.attempts,
@@ -88,6 +94,7 @@ export class RunValidationStepUseCase {
           return reason.componentCode;
         }),
         contractCompatibilityIssues: deduplicateStrings([
+          ...deterministicContractCompatibilityIssues,
           ...buildEmptyContractCompatibilityIssues(request.componentInterfaces),
           ...result.output.contractCompatibilityIssues,
         ]),
@@ -95,6 +102,7 @@ export class RunValidationStepUseCase {
         isRegenerationRequired: regenerationReasons.length > 0,
         issuesFound: deduplicateStrings([
           ...deterministicIssues,
+          ...deterministicContractCompatibilityIssues,
           ...result.output.issuesFound,
         ]),
         regenerationReasons,
@@ -119,8 +127,6 @@ export class RunValidationStepUseCase {
       request.gapAnalysis,
       request.resolvingGaps,
       request.generatedCode,
-      request.unitTests,
-      request.e2eTests,
     );
 
     return {

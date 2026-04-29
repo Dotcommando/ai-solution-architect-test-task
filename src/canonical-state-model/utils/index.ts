@@ -4,14 +4,24 @@ export function extractCoveredCanonicalStates(
   canonicalStateModel: ICanonicalStateModel,
   values: string[],
 ): string[] {
-  return extractCanonicalStates(canonicalStateModel, values, 'coveredAliases');
+  return extractCanonicalStates(
+    canonicalStateModel,
+    values,
+    'coveredAliases',
+    true,
+  );
 }
 
 export function extractRequiredCanonicalStates(
   canonicalStateModel: ICanonicalStateModel,
   values: string[],
 ): string[] {
-  return extractCanonicalStates(canonicalStateModel, values, 'requiredAliases');
+  return extractCanonicalStates(
+    canonicalStateModel,
+    values,
+    'requiredAliases',
+    false,
+  );
 }
 
 export function getHardBlockingCanonicalStates(
@@ -51,6 +61,7 @@ function extractCanonicalStates(
   canonicalStateModel: ICanonicalStateModel,
   values: string[],
   aliasField: 'coveredAliases' | 'requiredAliases',
+  includeStateCode: boolean,
 ): string[] {
   const matchedStates = new Set<string>();
 
@@ -59,6 +70,7 @@ function extractCanonicalStates(
 
     for (const state of canonicalStateModel.states) {
       if (
+        (includeStateCode && matchesAlias(normalizedValue, state.code)) ||
         state[aliasField].some((alias) => {
           return matchesAlias(normalizedValue, alias);
         })

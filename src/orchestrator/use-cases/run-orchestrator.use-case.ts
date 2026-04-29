@@ -17,7 +17,10 @@ import { IE2eTestsStepInput } from '../../e2e-tests/types';
 import { RunE2eTestsStepUseCase } from '../../e2e-tests/use-cases/run-e2e-tests-step.use-case';
 import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-analysis-step.use-case';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
-import { ORCHESTRATOR_MAX_VALIDATION_PASSES } from '../constants';
+import {
+  ORCHESTRATOR_DEFAULT_MAX_STEP_LIMIT,
+  ORCHESTRATOR_MAX_VALIDATION_PASSES,
+} from '../constants';
 import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
 import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
 import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
@@ -72,6 +75,8 @@ import {
   buildResolvingGapsStepReport,
   buildRunCompletedUpdate,
   buildRunFailedUpdate,
+  buildRunInterruptedUpdate,
+  buildInterruptedRunResult,
   buildRunResult,
   buildRunStepTokenUsage,
   buildRunStartedUpdate,
@@ -110,6 +115,7 @@ export class RunOrchestratorUseCase {
     request: IRunOrchestratorRequest,
   ): Promise<IRunOrchestratorResponse> {
     const runId = await this.createRun(request);
+    const maxStepLimit = this.resolveMaxStepLimit();
 
     try {
       await this.markRunAsStarted(runId);
@@ -130,6 +136,19 @@ export class RunOrchestratorUseCase {
       await this.saveRunProgress(runId, parsingArtifacts, parsingDerivedData, [
         parsingStepReport,
       ]);
+      {
+        const interruptedResult = await this.interruptIfMaxStepLimitReached(
+          runId,
+          parsingArtifacts,
+          parsingDerivedData,
+          [parsingStepReport],
+          maxStepLimit,
+        );
+
+        if (interruptedResult !== null) {
+          return interruptedResult;
+        }
+      }
 
       const gapAnalysisResult = await this.runGapAnalysisStage(
         request,
@@ -156,6 +175,19 @@ export class RunOrchestratorUseCase {
         parsingDerivedData,
         stepsWithGapAnalysis,
       );
+      {
+        const interruptedResult = await this.interruptIfMaxStepLimitReached(
+          runId,
+          artifactsWithGapAnalysis,
+          parsingDerivedData,
+          stepsWithGapAnalysis,
+          maxStepLimit,
+        );
+
+        if (interruptedResult !== null) {
+          return interruptedResult;
+        }
+      }
 
       const resolvingGapsResult = await this.runResolvingGapsStage(
         request,
@@ -183,6 +215,19 @@ export class RunOrchestratorUseCase {
         parsingDerivedData,
         stepsWithResolvingGaps,
       );
+      {
+        const interruptedResult = await this.interruptIfMaxStepLimitReached(
+          runId,
+          artifactsWithResolvingGaps,
+          parsingDerivedData,
+          stepsWithResolvingGaps,
+          maxStepLimit,
+        );
+
+        if (interruptedResult !== null) {
+          return interruptedResult;
+        }
+      }
 
       const userFlowsResult = await this.runUserFlowsStage(
         request,
@@ -211,6 +256,19 @@ export class RunOrchestratorUseCase {
         parsingDerivedData,
         stepsWithUserFlows,
       );
+      {
+        const interruptedResult = await this.interruptIfMaxStepLimitReached(
+          runId,
+          artifactsWithUserFlows,
+          parsingDerivedData,
+          stepsWithUserFlows,
+          maxStepLimit,
+        );
+
+        if (interruptedResult !== null) {
+          return interruptedResult;
+        }
+      }
 
       const orderedComponents = orderComponentsForInterfaces(
         parsingResult.output.components,
@@ -252,6 +310,19 @@ export class RunOrchestratorUseCase {
           parsingDerivedData,
           stepsWithComponentInterfaces,
         );
+        {
+          const interruptedResult = await this.interruptIfMaxStepLimitReached(
+            runId,
+            artifactsWithComponentInterfaces,
+            parsingDerivedData,
+            stepsWithComponentInterfaces,
+            maxStepLimit,
+          );
+
+          if (interruptedResult !== null) {
+            return interruptedResult;
+          }
+        }
       }
 
       const componentInterfaces =
@@ -327,6 +398,19 @@ export class RunOrchestratorUseCase {
           parsingDerivedData,
           stepsWithUnitTests,
         );
+        {
+          const interruptedResult = await this.interruptIfMaxStepLimitReached(
+            runId,
+            artifactsWithUnitTests,
+            parsingDerivedData,
+            stepsWithUnitTests,
+            maxStepLimit,
+          );
+
+          if (interruptedResult !== null) {
+            return interruptedResult;
+          }
+        }
       }
 
       const unitTests = artifactsWithUnitTests.unitTests;
@@ -394,6 +478,19 @@ export class RunOrchestratorUseCase {
         parsingDerivedData,
         stepsWithE2eTests,
       );
+      {
+        const interruptedResult = await this.interruptIfMaxStepLimitReached(
+          runId,
+          artifactsWithE2eTests,
+          parsingDerivedData,
+          stepsWithE2eTests,
+          maxStepLimit,
+        );
+
+        if (interruptedResult !== null) {
+          return interruptedResult;
+        }
+      }
 
       let artifactsWithGeneratedCode = artifactsWithE2eTests;
       let stepsWithGeneratedCode = stepsWithE2eTests;
@@ -474,6 +571,19 @@ export class RunOrchestratorUseCase {
           parsingDerivedData,
           stepsWithGeneratedCode,
         );
+        {
+          const interruptedResult = await this.interruptIfMaxStepLimitReached(
+            runId,
+            artifactsWithGeneratedCode,
+            parsingDerivedData,
+            stepsWithGeneratedCode,
+            maxStepLimit,
+          );
+
+          if (interruptedResult !== null) {
+            return interruptedResult;
+          }
+        }
       }
 
       let artifactsWithValidation = artifactsWithGeneratedCode;
@@ -527,15 +637,26 @@ export class RunOrchestratorUseCase {
           parsingDerivedData,
           stepsWithValidation,
         );
+        {
+          const interruptedResult = await this.interruptIfMaxStepLimitReached(
+            runId,
+            artifactsWithValidation,
+            parsingDerivedData,
+            stepsWithValidation,
+            maxStepLimit,
+          );
+
+          if (interruptedResult !== null) {
+            return interruptedResult;
+          }
+        }
 
         if (!validationResult.output.isRegenerationRequired) {
           break;
         }
 
         if (validationPass === ORCHESTRATOR_MAX_VALIDATION_PASSES - 1) {
-          throw new Error(
-            'Validation did not converge within the allowed regeneration passes',
-          );
+          break;
         }
 
         const regenerationTargets = orderedComponents.filter((component) => {
@@ -629,6 +750,19 @@ export class RunOrchestratorUseCase {
             parsingDerivedData,
             stepsWithValidation,
           );
+          {
+            const interruptedResult = await this.interruptIfMaxStepLimitReached(
+              runId,
+              artifactsWithValidation,
+              parsingDerivedData,
+              stepsWithValidation,
+              maxStepLimit,
+            );
+
+            if (interruptedResult !== null) {
+              return interruptedResult;
+            }
+          }
         }
       }
 
@@ -652,6 +786,46 @@ export class RunOrchestratorUseCase {
       await this.markRunAsFailed(runId, error);
       throw error;
     }
+  }
+
+  private resolveMaxStepLimit(): number {
+    const rawValue = process.env.MAX_STEP_LIMIT;
+
+    if (rawValue === undefined || rawValue.trim() === '') {
+      return ORCHESTRATOR_DEFAULT_MAX_STEP_LIMIT;
+    }
+
+    const parsedValue = Number(rawValue);
+
+    if (!Number.isInteger(parsedValue) || parsedValue <= 0) {
+      return ORCHESTRATOR_DEFAULT_MAX_STEP_LIMIT;
+    }
+
+    return parsedValue;
+  }
+
+  private async interruptIfMaxStepLimitReached(
+    runId: string,
+    artifacts: IRunArtifacts,
+    derivedData: IRunDerivedData,
+    steps: IRunStepReport[],
+    maxStepLimit: number,
+  ): Promise<IRunResult | null> {
+    if (steps.length < maxStepLimit) {
+      return null;
+    }
+
+    const issueMessage = `Run interrupted after reaching MAX_STEP_LIMIT (${maxStepLimit}).`;
+    const result = buildInterruptedRunResult(
+      artifacts,
+      derivedData,
+      issueMessage,
+    );
+
+    await this.saveRunProgress(runId, artifacts, derivedData, steps, result);
+    await this.runRepository.updateById(buildRunInterruptedUpdate(runId));
+
+    return result;
   }
 
   private async createRun(request: IRunOrchestratorRequest): Promise<string> {

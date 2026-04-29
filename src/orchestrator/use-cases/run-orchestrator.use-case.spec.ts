@@ -2178,6 +2178,457 @@ describe('RunOrchestratorUseCase', () => {
     );
   });
 
+  it('returns the last validation result when regeneration does not converge', async () => {
+    const runRepository = createRunRepositoryMock();
+    const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();
+    const runParsingStepUseCase = createRunParsingStepUseCaseMock();
+    const runResolvingGapsStepUseCase = createRunResolvingGapsStepUseCaseMock();
+    const runUserFlowsStepUseCase = createRunUserFlowsStepUseCaseMock();
+    const runComponentInterfacesStepUseCase =
+      createRunComponentInterfacesStepUseCaseMock();
+    const runUnitTestsStepUseCase = createRunUnitTestsStepUseCaseMock();
+    const runE2eTestsStepUseCase = createRunE2eTestsStepUseCaseMock();
+    const runComponentGenerationStepUseCase =
+      createRunComponentGenerationStepUseCaseMock();
+    const runValidationStepUseCase = createRunValidationStepUseCaseMock();
+
+    runRepository.create = jest.fn().mockResolvedValue('run-id-3');
+    runRepository.updateById = jest.fn().mockResolvedValue(null);
+    runParsingStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        businessContext: 'merchant dashboard',
+        components: [
+          {
+            code: 'payment_card',
+            name: 'Payment card',
+            parentCode: null,
+            purpose: 'Display a saved card.',
+            statePolicy: 'smart',
+            type: 'card',
+          },
+        ],
+        constraints: [],
+        content: [],
+        interactions: [
+          {
+            code: 'select_card',
+            componentCode: 'payment_card',
+            description: 'Select the saved card.',
+            targetComponentCode: null,
+            type: 'select',
+          },
+        ],
+        rootComponentCode: 'payment_card',
+        specifiedStates: [],
+        tokenReferences: [],
+      },
+      rawOutput: '{"rootComponentCode":"payment_card"}',
+      tokenUsage: createTokenUsage(10, 4, 14),
+    });
+    runGapAnalysisStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        accessibilityGaps: [],
+        missingStates: ['Selected state is not explicitly defined.'],
+        recommendations: ['Define selected state.'],
+        responsiveGaps: [],
+      },
+      rawOutput:
+        '{"missingStates":["Selected state is not explicitly defined."]}',
+      tokenUsage: createTokenUsage(10, 4, 14),
+    });
+    runResolvingGapsStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        decisions: [
+          {
+            affectedComponentCodes: ['payment_card'],
+            code: 'define_selected_state',
+            decision: 'Add an explicit selected state for the payment card.',
+            rationale: 'Selection must be explicit.',
+            sourceGap: 'Selected state is not explicitly defined.',
+          },
+        ],
+      },
+      rawOutput: '{"decisions":[{"code":"define_selected_state"}]}',
+      tokenUsage: createTokenUsage(10, 4, 14),
+    });
+    runUserFlowsStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        flows: [
+          {
+            code: 'select_saved_card_fast_path',
+            completionCriteria: 'A saved card is selected.',
+            kind: 'shortest_happy',
+            name: 'Select saved card quickly',
+            steps: [
+              {
+                action: 'User selects the saved card.',
+                code: 'select_card',
+                componentCode: 'payment_card',
+                expectedResult: 'The card enters the selected state.',
+                inputData: null,
+              },
+            ],
+          },
+        ],
+      },
+      rawOutput: '{"flows":[{"code":"select_saved_card_fast_path"}]}',
+      tokenUsage: createTokenUsage(10, 4, 14),
+    });
+    runComponentInterfacesStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        accepts: [],
+        componentCode: 'payment_card',
+        componentName: 'Payment card',
+        returns: [],
+      },
+      rawOutput: '{"componentCode":"payment_card"}',
+      tokenUsage: createTokenUsage(10, 4, 14),
+    });
+    runUnitTestsStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        componentCode: 'payment_card',
+        componentName: 'Payment card',
+        coveredBehaviors: ['renders saved card details'],
+        coveredStates: ['selected'],
+        files: [
+          {
+            content: 'describe("PaymentCard", () => {});',
+            filename: join(
+              process.cwd(),
+              'generated/frontend',
+              'src',
+              'components',
+              'PaymentCard',
+              'PaymentCard.spec.tsx',
+            ),
+          },
+        ],
+      },
+      rawOutput: '{"componentCode":"payment_card"}',
+      tokenUsage: createTokenUsage(10, 4, 14),
+    });
+    runE2eTestsStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        coveredBehaviors: ['selection propagates through the card flow'],
+        coveredComponentCodes: ['payment_card'],
+        coveredFlowCodes: ['select_saved_card_fast_path'],
+        coveredStates: ['selected'],
+        files: [
+          {
+            content: 'describe("PaymentCard e2e", () => {});',
+            filename: join(
+              process.cwd(),
+              'generated/frontend',
+              'src',
+              'components',
+              'PaymentCard',
+              'PaymentCard.e2e.spec.tsx',
+            ),
+          },
+        ],
+        rootComponentCode: 'payment_card',
+        rootComponentName: 'Payment card',
+      },
+      rawOutput: '{"rootComponentCode":"payment_card"}',
+      tokenUsage: createTokenUsage(10, 4, 14),
+    });
+    runComponentGenerationStepUseCase.execute = jest
+      .fn()
+      .mockResolvedValueOnce({
+        attempts: 1,
+        output: {
+          componentCode: 'payment_card',
+          componentName: 'Payment card',
+          files: [
+            {
+              content: 'export function PaymentCard() { return <div />; }',
+              filename: join(
+                process.cwd(),
+                'generated/frontend',
+                'src',
+                'components',
+                'PaymentCard',
+                'PaymentCard.tsx',
+              ),
+            },
+          ],
+          statesCovered: [],
+          tokensUsed: ['--color-text-primary'],
+        },
+        rawOutput: '{"componentCode":"payment_card"}',
+        tokenUsage: createTokenUsage(10, 4, 14),
+      })
+      .mockResolvedValueOnce({
+        attempts: 1,
+        output: {
+          componentCode: 'payment_card',
+          componentName: 'Payment card',
+          files: [
+            {
+              content:
+                'export function PaymentCard() { return <div data-pass="2" />; }',
+              filename: join(
+                process.cwd(),
+                'generated/frontend',
+                'src',
+                'components',
+                'PaymentCard',
+                'PaymentCard.tsx',
+              ),
+            },
+          ],
+          statesCovered: [],
+          tokensUsed: ['--color-text-primary'],
+        },
+        rawOutput: '{"componentCode":"payment_card"}',
+        tokenUsage: createTokenUsage(10, 4, 14),
+      })
+      .mockResolvedValueOnce({
+        attempts: 1,
+        output: {
+          componentCode: 'payment_card',
+          componentName: 'Payment card',
+          files: [
+            {
+              content:
+                'export function PaymentCard() { return <div data-pass="3" />; }',
+              filename: join(
+                process.cwd(),
+                'generated/frontend',
+                'src',
+                'components',
+                'PaymentCard',
+                'PaymentCard.tsx',
+              ),
+            },
+          ],
+          statesCovered: [],
+          tokensUsed: ['--color-text-primary'],
+        },
+        rawOutput: '{"componentCode":"payment_card"}',
+        tokenUsage: createTokenUsage(10, 4, 14),
+      });
+    runValidationStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        accessibilityScore: 'needs_attention',
+        affectedComponentCodes: ['payment_card'],
+        contractCompatibilityIssues: [],
+        hallucinationsCaught: [],
+        isRegenerationRequired: true,
+        issuesFound: ['Missing required states: selected'],
+        regenerationReasons: [
+          {
+            componentCode: 'payment_card',
+            reasons: ['Missing required states: selected'],
+          },
+        ],
+        stateCoverage: {
+          coveredCount: 0,
+          label: '0/1',
+          totalCount: 1,
+        },
+        tokenCompliance: true,
+      },
+      rawOutput: '{"tokenCompliance":true}',
+      tokenUsage: createTokenUsage(10, 4, 14),
+    });
+
+    const useCase = new RunOrchestratorUseCase(
+      runRepository as RunRepository,
+      runGapAnalysisStepUseCase as RunGapAnalysisStepUseCase,
+      runParsingStepUseCase as RunParsingStepUseCase,
+      runResolvingGapsStepUseCase as RunResolvingGapsStepUseCase,
+      runUserFlowsStepUseCase as RunUserFlowsStepUseCase,
+      runComponentInterfacesStepUseCase as RunComponentInterfacesStepUseCase,
+      runUnitTestsStepUseCase as RunUnitTestsStepUseCase,
+      runE2eTestsStepUseCase as RunE2eTestsStepUseCase,
+      runComponentGenerationStepUseCase as RunComponentGenerationStepUseCase,
+      runValidationStepUseCase as RunValidationStepUseCase,
+    );
+
+    await expect(
+      useCase.run({
+        componentDescription: 'Payment card component.',
+        figmaUrl: null,
+        screenshotUrl: null,
+      }),
+    ).resolves.toEqual({
+      component: {
+        business_context: 'merchant dashboard',
+        name: 'Payment card',
+        type: 'card',
+      },
+      extraction: {
+        constraints: [],
+        specified_states: [],
+        tokens_referenced: [],
+      },
+      gap_analysis: {
+        accessibility_gaps: [],
+        missing_states: ['Selected state is not explicitly defined.'],
+        recommendations: ['Define selected state.'],
+        responsive_gaps: [],
+      },
+      generated_code: {
+        files: [
+          {
+            content:
+              'export function PaymentCard() { return <div data-pass="3" />; }',
+            filename: join(
+              process.cwd(),
+              'generated/frontend',
+              'src',
+              'components',
+              'PaymentCard',
+              'PaymentCard.tsx',
+            ),
+          },
+        ],
+        framework: 'React',
+        states_covered: [],
+        tokens_used: ['--color-text-primary'],
+      },
+      validation: {
+        accessibility_score: 'needs_attention',
+        hallucinations_caught: [],
+        issues_found: ['Missing required states: selected'],
+        states_coverage: '0/1',
+        token_compliance: true,
+      },
+    });
+
+    expect(runValidationStepUseCase.execute).toHaveBeenCalledTimes(3);
+    expect(runComponentGenerationStepUseCase.execute).toHaveBeenCalledTimes(3);
+    expect(runRepository.updateById).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        id: 'run-id-3',
+        status: RUN_STATUS.COMPLETED,
+      }),
+    );
+  });
+
+  it('interrupts the run when MAX_STEP_LIMIT is reached and returns partial data', async () => {
+    const previousMaxStepLimit = process.env.MAX_STEP_LIMIT;
+
+    process.env.MAX_STEP_LIMIT = '1';
+
+    try {
+      const runRepository = createRunRepositoryMock();
+      const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();
+      const runParsingStepUseCase = createRunParsingStepUseCaseMock();
+      const runResolvingGapsStepUseCase =
+        createRunResolvingGapsStepUseCaseMock();
+      const runUserFlowsStepUseCase = createRunUserFlowsStepUseCaseMock();
+      const runComponentInterfacesStepUseCase =
+        createRunComponentInterfacesStepUseCaseMock();
+      const runUnitTestsStepUseCase = createRunUnitTestsStepUseCaseMock();
+      const runE2eTestsStepUseCase = createRunE2eTestsStepUseCaseMock();
+      const runComponentGenerationStepUseCase =
+        createRunComponentGenerationStepUseCaseMock();
+      const runValidationStepUseCase = createRunValidationStepUseCaseMock();
+
+      runRepository.create = jest.fn().mockResolvedValue('run-id-4');
+      runRepository.updateById = jest.fn().mockResolvedValue(null);
+      runParsingStepUseCase.execute = jest.fn().mockResolvedValue({
+        attempts: 1,
+        output: {
+          businessContext: 'merchant dashboard',
+          components: [
+            {
+              code: 'payment_card',
+              name: 'Payment card',
+              parentCode: null,
+              purpose: 'Display a saved card.',
+              statePolicy: 'smart',
+              type: 'card',
+            },
+          ],
+          constraints: [],
+          content: [],
+          interactions: [],
+          rootComponentCode: 'payment_card',
+          specifiedStates: [],
+          tokenReferences: [],
+        },
+        rawOutput: '{"rootComponentCode":"payment_card"}',
+        tokenUsage: createTokenUsage(10, 4, 14),
+      });
+
+      const useCase = new RunOrchestratorUseCase(
+        runRepository as RunRepository,
+        runGapAnalysisStepUseCase as RunGapAnalysisStepUseCase,
+        runParsingStepUseCase as RunParsingStepUseCase,
+        runResolvingGapsStepUseCase as RunResolvingGapsStepUseCase,
+        runUserFlowsStepUseCase as RunUserFlowsStepUseCase,
+        runComponentInterfacesStepUseCase as RunComponentInterfacesStepUseCase,
+        runUnitTestsStepUseCase as RunUnitTestsStepUseCase,
+        runE2eTestsStepUseCase as RunE2eTestsStepUseCase,
+        runComponentGenerationStepUseCase as RunComponentGenerationStepUseCase,
+        runValidationStepUseCase as RunValidationStepUseCase,
+      );
+
+      await expect(
+        useCase.run({
+          componentDescription: 'Payment card component.',
+          figmaUrl: null,
+          screenshotUrl: null,
+        }),
+      ).resolves.toEqual({
+        component: {
+          business_context: 'merchant dashboard',
+          name: 'Payment card',
+          type: 'card',
+        },
+        extraction: {
+          constraints: [],
+          specified_states: [],
+          tokens_referenced: [],
+        },
+        gap_analysis: {
+          accessibility_gaps: [],
+          missing_states: [],
+          recommendations: [],
+          responsive_gaps: [],
+        },
+        generated_code: {
+          files: [],
+          framework: '',
+          states_covered: [],
+          tokens_used: [],
+        },
+        validation: {
+          accessibility_score: 'not_run',
+          hallucinations_caught: [],
+          issues_found: ['Run interrupted after reaching MAX_STEP_LIMIT (1).'],
+          states_coverage: '0/0',
+          token_compliance: true,
+        },
+      });
+
+      expect(runGapAnalysisStepUseCase.execute).not.toHaveBeenCalled();
+      expect(runRepository.updateById).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          id: 'run-id-4',
+          status: RUN_STATUS.INTERRUPTED,
+        }),
+      );
+    } finally {
+      if (previousMaxStepLimit === undefined) {
+        delete process.env.MAX_STEP_LIMIT;
+      } else {
+        process.env.MAX_STEP_LIMIT = previousMaxStepLimit;
+      }
+    }
+  });
+
   it('marks the run as failed when parsing throws', async () => {
     const runRepository = createRunRepositoryMock();
     const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();

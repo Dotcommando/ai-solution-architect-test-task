@@ -7,15 +7,18 @@ import {
 import { ICanonicalStateModel } from '../../canonical-state-model/types';
 import { IComponentInterfacesStepOutput } from '../../component-interfaces/types';
 import { IDesignSystemContext } from '../../design-system/types';
-import { IE2eTestsStepOutput } from '../../e2e-tests/types';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
 import {
   IRunGeneratedCodeArtifact,
   IRunGeneratedComponentArtifact,
 } from '../../run/types';
 import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
-import { IParsingStepOutput } from '../../types';
-import { IUnitTestsStepOutput } from '../../unit-tests/types';
+import {
+  COMPONENT_INTERACTION_TYPE,
+  IParsedComponent,
+  IParsingStepOutput,
+  UI_COMPONENT_TYPE,
+} from '../../types';
 import { IValidationRegenerationReason } from '../types';
 
 export interface IValidationStateCoverageSummary {
@@ -51,41 +54,17 @@ export function buildStateCoverageSummary(
   gapAnalysis: IGapAnalysisStepOutput,
   resolvingGaps: IResolvingGapsStepOutput,
   generatedCode: IRunGeneratedCodeArtifact,
-  unitTests: { components: IUnitTestsStepOutput[] },
-  e2eTests: IE2eTestsStepOutput | null,
 ): IValidationStateCoverageSummary {
-  const requiredStates = deduplicateStrings([
-    ...extractRequiredCanonicalStates(
-      canonicalStateModel,
-      parsing.specifiedStates.map((state) => {
-        return state.name;
-      }),
-    ),
-    ...extractRequiredCanonicalStates(
-      canonicalStateModel,
-      gapAnalysis.missingStates,
-    ),
-    ...extractRequiredCanonicalStates(
-      canonicalStateModel,
-      resolvingGaps.decisions.flatMap((decision) => {
-        return [decision.decision, decision.sourceGap];
-      }),
-    ),
-  ]);
+  const requiredStates = buildRequiredStates(
+    canonicalStateModel,
+    parsing,
+    gapAnalysis,
+    resolvingGaps,
+  );
   const coveredStates = deduplicateStrings([
     ...buildNormalizedCoveredStates(
       canonicalStateModel,
       generatedCode.statesCovered,
-    ),
-    ...unitTests.components.flatMap((component) => {
-      return buildNormalizedCoveredStates(
-        canonicalStateModel,
-        component.coveredStates,
-      );
-    }),
-    ...buildNormalizedCoveredStates(
-      canonicalStateModel,
-      e2eTests?.coveredStates ?? [],
     ),
   ]);
   const missingStates = requiredStates.filter((state) => {
@@ -210,6 +189,61 @@ export function buildEmptyContractCompatibilityIssues(componentInterfaces: {
     : [];
 }
 
+export function buildDeterministicContractCompatibilityIssues(
+  componentInterfaces: {
+    components: IComponentInterfacesStepOutput[];
+  },
+  generatedCode: IRunGeneratedCodeArtifact,
+): string[] {
+  const issues = new Set<string>();
+  const callbackNames = extractKnownCallbackNames(componentInterfaces);
+
+  for (const componentInterface of componentInterfaces.components) {
+    const generatedComponent = generatedCode.components.find((component) => {
+      return component.componentCode === componentInterface.componentCode;
+    });
+
+    if (generatedComponent === undefined) {
+      continue;
+    }
+
+    const callbackFields = [
+      ...componentInterface.accepts,
+      ...componentInterface.returns,
+    ].filter((field) => {
+      return isCallbackFieldName(field.name);
+    });
+
+    for (const callbackField of callbackFields) {
+      const isCallbackUsed = generatedComponent.files.some((file) => {
+        return isCallbackInvoked(file.content, callbackField.name);
+      });
+
+      if (!isCallbackUsed) {
+        issues.add(
+          `${componentInterface.componentCode}: callback \`${callbackField.name}\` from the interface is never invoked in generated files.`,
+        );
+      }
+    }
+  }
+
+  for (const component of generatedCode.components) {
+    for (const callbackName of callbackNames) {
+      if (
+        component.files.some((file) => {
+          return containsNoOpCallbackProp(file.content, callbackName);
+        })
+      ) {
+        issues.add(
+          `${component.componentCode}: passes a no-op handler for \`${callbackName}\`, which breaks callback wiring.`,
+        );
+      }
+    }
+  }
+
+  return Array.from(issues).sort();
+}
+
 function extractCssVariables(content: string): string[] {
   const cssVariables = new Set<string>();
   const cssVariablePattern = /var\(\s*(--[A-Za-z0-9-_]+)\s*(?:,[^)]+)?\)/g;
@@ -258,12 +292,19 @@ function findStateCoverageAffectedComponentCodes(
   const affectedComponentCodes = new Set<string>();
 
   for (const state of parsing.specifiedStates) {
+    const component = findParsedComponent(parsing, state.componentCode);
+    const requiredStates = extractCoveredCanonicalStates(canonicalStateModel, [
+      state.name,
+    ]);
+
     if (
-      extractRequiredCanonicalStates(canonicalStateModel, [state.name]).some(
-        (requiredState) => {
-          return missingStates.includes(requiredState);
-        },
-      )
+      component !== null &&
+      requiredStates.some((requiredState) => {
+        return (
+          missingStates.includes(requiredState) &&
+          canComponentOwnCanonicalState(component, requiredState)
+        );
+      })
     ) {
       affectedComponentCodes.add(state.componentCode);
     }
@@ -278,14 +319,33 @@ function findStateCoverageAffectedComponentCodes(
     for (const missingState of missingStates) {
       if (candidateStates.includes(missingState)) {
         for (const componentCode of decision.affectedComponentCodes) {
-          affectedComponentCodes.add(componentCode);
+          const component = findParsedComponent(parsing, componentCode);
+
+          if (
+            component !== null &&
+            canComponentOwnCanonicalState(component, missingState)
+          ) {
+            affectedComponentCodes.add(componentCode);
+          }
         }
       }
     }
   }
 
   if (affectedComponentCodes.size === 0 && parsing.rootComponentCode !== '') {
-    affectedComponentCodes.add(parsing.rootComponentCode);
+    const rootComponent = findParsedComponent(
+      parsing,
+      parsing.rootComponentCode,
+    );
+
+    for (const missingState of missingStates) {
+      if (
+        rootComponent !== null &&
+        canComponentOwnCanonicalState(rootComponent, missingState)
+      ) {
+        affectedComponentCodes.add(parsing.rootComponentCode);
+      }
+    }
   }
 
   return Array.from(affectedComponentCodes).sort();
@@ -298,6 +358,170 @@ function buildNormalizedCoveredStates(
   return deduplicateStrings(
     extractCoveredCanonicalStates(canonicalStateModel, values),
   );
+}
+
+function buildRequiredStates(
+  canonicalStateModel: ICanonicalStateModel,
+  parsing: IParsingStepOutput,
+  gapAnalysis: IGapAnalysisStepOutput,
+  resolvingGaps: IResolvingGapsStepOutput,
+): string[] {
+  const explicitRequiredStates = deduplicateStrings(
+    extractCoveredCanonicalStates(
+      canonicalStateModel,
+      parsing.specifiedStates.map((state) => {
+        return state.name;
+      }),
+    ),
+  );
+  const inferredRequiredStates = deduplicateStrings([
+    ...extractRequiredCanonicalStates(
+      canonicalStateModel,
+      gapAnalysis.missingStates,
+    ),
+    ...extractRequiredCanonicalStates(
+      canonicalStateModel,
+      resolvingGaps.decisions.flatMap((decision) => {
+        return [decision.decision, decision.sourceGap];
+      }),
+    ),
+  ]);
+
+  return deduplicateStrings([
+    ...explicitRequiredStates,
+    ...inferredRequiredStates.filter((state) => {
+      return shouldTreatInferredStateAsRequired(
+        parsing,
+        explicitRequiredStates,
+        state,
+      );
+    }),
+  ]);
+}
+
+function extractKnownCallbackNames(componentInterfaces: {
+  components: IComponentInterfacesStepOutput[];
+}): string[] {
+  const callbackNames = new Set<string>();
+
+  for (const componentInterface of componentInterfaces.components) {
+    for (const field of [
+      ...componentInterface.accepts,
+      ...componentInterface.returns,
+    ]) {
+      if (isCallbackFieldName(field.name)) {
+        callbackNames.add(field.name);
+      }
+    }
+  }
+
+  return Array.from(callbackNames).sort();
+}
+
+function isCallbackFieldName(name: string): boolean {
+  return /^on_[a-z0-9_]+$/i.test(name);
+}
+
+function isCallbackInvoked(content: string, callbackName: string): boolean {
+  const invocationPatterns = [
+    new RegExp(`\\b${escapeRegExp(callbackName)}\\s*\\(`),
+    new RegExp(`\\.${escapeRegExp(callbackName)}\\s*\\(`),
+  ];
+
+  return invocationPatterns.some((pattern) => {
+    return pattern.test(content);
+  });
+}
+
+function containsNoOpCallbackProp(
+  content: string,
+  callbackName: string,
+): boolean {
+  const pattern = new RegExp(
+    `${escapeRegExp(callbackName)}=\\{\\s*(?:\\([^)]*\\)|[a-zA-Z0-9_]+)?\\s*=>\\s*\\{\\s*(?:(?:/\\*[\\s\\S]*?\\*/)|(?://[^\\n]*\\n?)|\\s)*\\}\\s*\\}`,
+    'm',
+  );
+
+  return pattern.test(content);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function shouldTreatInferredStateAsRequired(
+  parsing: IParsingStepOutput,
+  explicitRequiredStates: string[],
+  state: string,
+): boolean {
+  if (explicitRequiredStates.includes(state)) {
+    return true;
+  }
+
+  if (state === 'selected') {
+    return parsing.interactions.some((interaction) => {
+      return interaction.type === COMPONENT_INTERACTION_TYPE.SELECT;
+    });
+  }
+
+  if (state === 'confirming') {
+    return (
+      parsing.interactions.some((interaction) => {
+        return (
+          interaction.type === COMPONENT_INTERACTION_TYPE.DELETE ||
+          interaction.type === COMPONENT_INTERACTION_TYPE.PICK_FILE
+        );
+      }) ||
+      parsing.components.some((component) => {
+        return canComponentOwnCanonicalState(component, state);
+      })
+    );
+  }
+
+  return true;
+}
+
+function findParsedComponent(
+  parsing: IParsingStepOutput,
+  componentCode: string,
+): IParsedComponent | null {
+  return (
+    parsing.components.find((component) => {
+      return component.code === componentCode;
+    }) ?? null
+  );
+}
+
+function canComponentOwnCanonicalState(
+  component: IParsedComponent,
+  state: string,
+): boolean {
+  switch (state) {
+    case 'selected':
+      return [
+        UI_COMPONENT_TYPE.ACTION,
+        UI_COMPONENT_TYPE.BUTTON,
+        UI_COMPONENT_TYPE.CARD,
+        UI_COMPONENT_TYPE.FIELD,
+        UI_COMPONENT_TYPE.FILE_UPLOAD,
+        UI_COMPONENT_TYPE.FORM,
+        UI_COMPONENT_TYPE.TABLE,
+        UI_COMPONENT_TYPE.WIZARD,
+      ].includes(component.type);
+    case 'confirming':
+      return [
+        UI_COMPONENT_TYPE.ACTION,
+        UI_COMPONENT_TYPE.BUTTON,
+        UI_COMPONENT_TYPE.CARD,
+        UI_COMPONENT_TYPE.FILE_UPLOAD,
+        UI_COMPONENT_TYPE.FORM,
+        UI_COMPONENT_TYPE.MODAL,
+        UI_COMPONENT_TYPE.PAGE,
+        UI_COMPONENT_TYPE.WIZARD,
+      ].includes(component.type);
+    default:
+      return true;
+  }
 }
 
 function deduplicateStrings(values: string[]): string[] {

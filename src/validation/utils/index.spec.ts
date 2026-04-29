@@ -3,8 +3,12 @@ import { DEFAULT_DESIGN_SYSTEM_CONTEXT } from '../../design-system/constants';
 import { IRunGeneratedCodeArtifact } from '../../run/types';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
 import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
-import { IParsingStepOutput } from '../../types';
-import { COMPONENT_STATE_POLICY } from '../../types';
+import {
+  COMPONENT_INTERACTION_TYPE,
+  COMPONENT_STATE_POLICY,
+  IParsingStepOutput,
+  UI_COMPONENT_TYPE,
+} from '../../types';
 import {
   buildDeterministicValidationIssues,
   buildRegenerationReasons,
@@ -92,18 +96,12 @@ describe('validation utils', () => {
       ],
       tokensUsed: ['--color-text-primary'],
     };
-    const unitTests = {
-      components: [],
-    };
-
     const stateCoverage = buildStateCoverageSummary(
       DEFAULT_CANONICAL_STATE_MODEL,
       parsing,
       gapAnalysis,
       resolvingGaps,
       generatedCode,
-      unitTests,
-      null,
     );
 
     expect(stateCoverage.coveredCount).toBe(2);
@@ -198,15 +196,121 @@ describe('validation utils', () => {
       gapAnalysis,
       resolvingGaps,
       generatedCode,
-      {
-        components: [],
-      },
-      null,
     );
 
     expect(stateCoverage.requiredStates).toEqual(['error', 'hover']);
     expect(stateCoverage.missingStates).toEqual(['hover']);
     expect(stateCoverage.label).toBe('1/2');
+  });
+
+  it('does not promote selected to a hard required state without an explicit select interaction', () => {
+    const parsing: IParsingStepOutput = {
+      businessContext: 'merchant dashboard',
+      components: [
+        {
+          code: 'transaction_table',
+          name: 'Transaction table',
+          parentCode: null,
+          purpose: 'Display a transaction list.',
+          statePolicy: COMPONENT_STATE_POLICY.SMART,
+          type: UI_COMPONENT_TYPE.TABLE,
+        },
+        {
+          code: 'transaction_table_status_badge',
+          name: 'Transaction status badge',
+          parentCode: 'transaction_table',
+          purpose: 'Render transaction status.',
+          statePolicy: COMPONENT_STATE_POLICY.DUMB,
+          type: UI_COMPONENT_TYPE.BADGE,
+        },
+      ],
+      constraints: [],
+      content: [],
+      interactions: [
+        {
+          code: 'open_transaction_details',
+          componentCode: 'transaction_table',
+          description: 'Open the transaction details view.',
+          targetComponentCode: null,
+          type: COMPONENT_INTERACTION_TYPE.OPEN_DETAILS,
+        },
+      ],
+      rootComponentCode: 'transaction_table',
+      specifiedStates: [],
+      tokenReferences: [],
+    };
+    const gapAnalysis: IGapAnalysisStepOutput = {
+      accessibilityGaps: [],
+      missingStates: ['Selected state is not explicitly defined.'],
+      recommendations: [],
+      responsiveGaps: [],
+    };
+    const resolvingGaps: IResolvingGapsStepOutput = {
+      decisions: [
+        {
+          affectedComponentCodes: ['transaction_table_status_badge'],
+          code: 'define_selected_status_treatment',
+          decision:
+            'Add a selected presentation treatment for the active transaction status badge.',
+          rationale: 'Clarify which transaction is currently active.',
+          sourceGap: 'Selected state is not explicitly defined.',
+        },
+      ],
+    };
+    const generatedCode: IRunGeneratedCodeArtifact = {
+      components: [
+        {
+          componentCode: 'transaction_table',
+          files: [
+            {
+              content: 'export function TransactionTable() { return null; }',
+              filename:
+                '/workspace/generated/frontend/src/components/TransactionTable/TransactionTable.tsx',
+            },
+          ],
+          statesCovered: ['default'],
+          tokensUsed: ['--color-text-primary'],
+        },
+        {
+          componentCode: 'transaction_table_status_badge',
+          files: [
+            {
+              content:
+                'export function TransactionTableStatusBadge() { return null; }',
+              filename:
+                '/workspace/generated/frontend/src/components/TransactionTableStatusBadge/TransactionTableStatusBadge.tsx',
+            },
+          ],
+          statesCovered: ['default', 'unknown'],
+          tokensUsed: ['--color-text-primary'],
+        },
+      ],
+      files: [],
+      framework: 'React',
+      statesCovered: ['default', 'unknown'],
+      tokensUsed: ['--color-text-primary'],
+    };
+
+    const stateCoverage = buildStateCoverageSummary(
+      DEFAULT_CANONICAL_STATE_MODEL,
+      parsing,
+      gapAnalysis,
+      resolvingGaps,
+      generatedCode,
+    );
+
+    expect(stateCoverage.requiredStates).toEqual(['active']);
+    expect(stateCoverage.missingStates).toEqual(['active']);
+    expect(
+      buildRegenerationReasons(
+        DEFAULT_CANONICAL_STATE_MODEL,
+        DEFAULT_DESIGN_SYSTEM_CONTEXT,
+        parsing,
+        resolvingGaps,
+        generatedCode,
+        stateCoverage,
+      ),
+    ).toEqual([]);
   });
 
   it('does not infer active from the word interactive', () => {
@@ -264,10 +368,6 @@ describe('validation utils', () => {
         statesCovered: [],
         tokensUsed: [],
       },
-      {
-        components: [],
-      },
-      null,
     );
 
     expect(stateCoverage.requiredStates).toEqual(['error', 'failed']);
@@ -335,10 +435,6 @@ describe('validation utils', () => {
       gapAnalysis,
       resolvingGaps,
       generatedCode,
-      {
-        components: [],
-      },
-      null,
     );
 
     expect(stateCoverage.requiredStates).toEqual(['hover']);
@@ -463,10 +559,6 @@ describe('validation utils', () => {
       gapAnalysis,
       resolvingGaps,
       generatedCode,
-      {
-        components: [],
-      },
-      null,
     );
 
     expect(stateCoverage.coveredStates).toEqual(['loading']);
@@ -568,10 +660,6 @@ describe('validation utils', () => {
       gapAnalysis,
       resolvingGaps,
       generatedCode,
-      {
-        components: [],
-      },
-      null,
     );
 
     expect(stateCoverage.coveredStates).toEqual(['success']);
@@ -665,10 +753,6 @@ describe('validation utils', () => {
       gapAnalysis,
       resolvingGaps,
       generatedCode,
-      {
-        components: [],
-      },
-      null,
     );
 
     expect(stateCoverage.coveredStates).toEqual(['confirming']);
@@ -759,10 +843,6 @@ describe('validation utils', () => {
       gapAnalysis,
       resolvingGaps,
       generatedCode,
-      {
-        components: [],
-      },
-      null,
     );
 
     expect(stateCoverage.coveredStates).toEqual(

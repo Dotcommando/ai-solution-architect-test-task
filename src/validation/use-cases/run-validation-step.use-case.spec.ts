@@ -83,6 +83,35 @@ describe('RunValidationStepUseCase', () => {
     };
   };
 
+  const createDeleteCardActionInterface =
+    (): IComponentInterfacesStepOutput => {
+      return {
+        accepts: [
+          {
+            description: 'Request delete callback.',
+            name: 'on_request_delete',
+            required: true,
+            type: '(payload: RequestDeletePayload) => void',
+          },
+          {
+            description: 'Confirm delete callback.',
+            name: 'on_confirm_delete',
+            required: true,
+            type: '(payload: ConfirmDeletePayload) => void',
+          },
+          {
+            description: 'Cancel delete callback.',
+            name: 'on_cancel_delete',
+            required: true,
+            type: '(payload: CancelDeletePayload) => void',
+          },
+        ],
+        componentCode: 'delete_card_action',
+        componentName: 'Delete card action',
+        returns: [],
+      };
+    };
+
   const createParsingOutput = (): IParsingStepOutput => {
     return {
       businessContext: 'merchant dashboard',
@@ -1048,5 +1077,263 @@ describe('RunValidationStepUseCase', () => {
       rawOutput: '{"tokenCompliance":true}',
       tokenUsage: executionResult.tokenUsage,
     });
+  });
+
+  it('does not count unit and e2e references as implemented state coverage', async () => {
+    const promptRepository = createPromptRepositoryMock();
+    const stepRepository = createStepRepositoryMock();
+    const stepExecutorService = createStepExecutorServiceMock();
+    const step = createStep();
+    const prompt = createPrompt();
+    const executionResult = createExecutionResult();
+
+    stepRepository.findActiveByCode = jest.fn().mockResolvedValue(step);
+    promptRepository.findActiveByCodeAndVariant = jest
+      .fn()
+      .mockResolvedValue(prompt);
+    stepExecutorService.execute = jest
+      .fn<
+        Promise<IStepExecutionResult<IValidationStepOutput>>,
+        [IValidationStepExecutorRequest]
+      >()
+      .mockResolvedValue({
+        ...executionResult,
+        output: {
+          ...executionResult.output,
+          issuesFound: [],
+        },
+      });
+
+    const useCase = new RunValidationStepUseCase(
+      stepRepository as StepRepository,
+      promptRepository as PromptRepository,
+      stepExecutorService as StepExecutorService,
+    );
+
+    await expect(
+      useCase.execute({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
+        componentDescription: 'Payment card component.',
+        componentInterfaces: createComponentInterfaces(),
+        designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
+        e2eTests: {
+          ...createE2eTests(),
+          coveredStates: ['confirming'],
+        },
+        generatedCode: {
+          ...createGeneratedCode(),
+          components: [
+            {
+              ...createGeneratedCode().components[0],
+              statesCovered: [],
+            },
+          ],
+          statesCovered: [],
+        },
+        gapAnalysis: {
+          ...createGapAnalysisOutput(),
+          missingStates: [
+            'Delete confirmation state (modal/popover) to prevent accidental destructive action',
+          ],
+        },
+        parsing: {
+          ...createParsingOutput(),
+          specifiedStates: [],
+        },
+        resolvingGaps: {
+          decisions: [
+            {
+              affectedComponentCodes: ['payment_card'],
+              code: 'delete_confirmation_dialog',
+              decision:
+                'Require a confirmation dialog before deletion and open the modal when delete is triggered.',
+              rationale:
+                'Define the confirmation state before destructive action.',
+              sourceGap:
+                'Delete confirmation state (modal/popover) to prevent accidental destructive action',
+            },
+          ],
+        },
+        unitTests: {
+          components: [
+            {
+              ...createUnitTests().components[0],
+              coveredStates: ['confirming'],
+            },
+          ],
+        },
+        userFlows: createUserFlowsOutput(),
+      }),
+    ).resolves.toEqual({
+      attempts: 1,
+      output: {
+        accessibilityScore: 'needs_attention',
+        affectedComponentCodes: ['payment_card'],
+        contractCompatibilityIssues: [],
+        hallucinationsCaught: [],
+        isRegenerationRequired: true,
+        issuesFound: ['Missing required states: confirming'],
+        regenerationReasons: [
+          {
+            componentCode: 'payment_card',
+            reasons: ['Missing required states: confirming'],
+          },
+        ],
+        stateCoverage: {
+          coveredCount: 0,
+          label: '0/1',
+          totalCount: 1,
+        },
+        tokenCompliance: true,
+      },
+      rawOutput: '{"tokenCompliance":true}',
+      tokenUsage: executionResult.tokenUsage,
+    });
+
+    const executeCall = stepExecutorService.execute.mock.calls[0]?.[0];
+
+    expect(executeCall).toBeDefined();
+    expect(executeCall.input.deterministicSummary.coveredStates).toEqual([]);
+  });
+
+  it('adds deterministic contract issues for no-op and missing callback wiring', async () => {
+    const promptRepository = createPromptRepositoryMock();
+    const stepRepository = createStepRepositoryMock();
+    const stepExecutorService = createStepExecutorServiceMock();
+    const step = createStep();
+    const prompt = createPrompt();
+    const executionResult = createExecutionResult();
+
+    stepRepository.findActiveByCode = jest.fn().mockResolvedValue(step);
+    promptRepository.findActiveByCodeAndVariant = jest
+      .fn()
+      .mockResolvedValue(prompt);
+    stepExecutorService.execute = jest
+      .fn<
+        Promise<IStepExecutionResult<IValidationStepOutput>>,
+        [IValidationStepExecutorRequest]
+      >()
+      .mockResolvedValue({
+        ...executionResult,
+        output: {
+          ...executionResult.output,
+          contractCompatibilityIssues: [],
+          issuesFound: [],
+        },
+      });
+
+    const useCase = new RunValidationStepUseCase(
+      stepRepository as StepRepository,
+      promptRepository as PromptRepository,
+      stepExecutorService as StepExecutorService,
+    );
+
+    const componentInterfaces = {
+      components: [
+        createComponentInterfaces().components[0],
+        createDeleteCardActionInterface(),
+      ],
+    };
+
+    const result = await useCase.execute({
+      canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
+      componentDescription: 'Payment card component.',
+      componentInterfaces,
+      designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
+      e2eTests: null,
+      generatedCode: {
+        components: [
+          {
+            componentCode: 'delete_card_action',
+            files: [
+              {
+                content:
+                  'export function DeleteCardAction(props: { on_request_delete: () => void; on_confirm_delete: () => void; on_cancel_delete: () => void; }) { return <button onClick={props.on_request_delete}>Delete</button>; }',
+                filename:
+                  '/workspace/generated/frontend/src/components/DeleteCardAction/DeleteCardAction.tsx',
+              },
+            ],
+            statesCovered: ['confirming'],
+            tokensUsed: ['--color-text-primary'],
+          },
+          {
+            componentCode: 'payment_card',
+            files: [
+              {
+                content:
+                  'export function PaymentCard() { return <DeleteCardAction on_request_delete={() => {}} on_confirm_delete={() => {}} on_cancel_delete={() => {}} />; }',
+                filename:
+                  '/workspace/generated/frontend/src/components/PaymentCard/PaymentCard.tsx',
+              },
+            ],
+            statesCovered: ['confirming'],
+            tokensUsed: ['--color-text-primary'],
+          },
+        ],
+        files: [
+          {
+            content:
+              'export function DeleteCardAction(props: { on_request_delete: () => void; on_confirm_delete: () => void; on_cancel_delete: () => void; }) { return <button onClick={props.on_request_delete}>Delete</button>; }',
+            filename:
+              '/workspace/generated/frontend/src/components/DeleteCardAction/DeleteCardAction.tsx',
+          },
+          {
+            content:
+              'export function PaymentCard() { return <DeleteCardAction on_request_delete={() => {}} on_confirm_delete={() => {}} on_cancel_delete={() => {}} />; }',
+            filename:
+              '/workspace/generated/frontend/src/components/PaymentCard/PaymentCard.tsx',
+          },
+        ],
+        framework: 'React',
+        statesCovered: ['confirming'],
+        tokensUsed: ['--color-text-primary'],
+      },
+      gapAnalysis: {
+        ...createGapAnalysisOutput(),
+        missingStates: [],
+      },
+      parsing: {
+        ...createParsingOutput(),
+        specifiedStates: [],
+      },
+      resolvingGaps: {
+        decisions: [],
+      },
+      unitTests: {
+        components: [],
+      },
+      userFlows: createUserFlowsOutput(),
+    });
+
+    expect(result.attempts).toBe(1);
+    expect(result.rawOutput).toBe('{"tokenCompliance":true}');
+    expect(result.tokenUsage).toEqual(executionResult.tokenUsage);
+    expect(result.output.accessibilityScore).toBe('needs_attention');
+    expect(result.output.affectedComponentCodes).toEqual([]);
+    expect(result.output.hallucinationsCaught).toEqual([]);
+    expect(result.output.isRegenerationRequired).toBe(false);
+    expect(result.output.regenerationReasons).toEqual([]);
+    expect(result.output.stateCoverage).toEqual({
+      coveredCount: 0,
+      label: '0/0',
+      totalCount: 0,
+    });
+    expect(result.output.tokenCompliance).toBe(true);
+    expect(Array.isArray(result.output.contractCompatibilityIssues)).toBe(true);
+    expect(result.output.contractCompatibilityIssues).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('payment_card'),
+        expect.stringContaining('on_request_delete'),
+        expect.stringContaining('delete_card_action'),
+        expect.stringContaining('on_confirm_delete'),
+      ]),
+    );
+    expect(Array.isArray(result.output.issuesFound)).toBe(true);
+    expect(result.output.issuesFound).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('payment_card'),
+        expect.stringContaining('delete_card_action'),
+      ]),
+    );
   });
 });
