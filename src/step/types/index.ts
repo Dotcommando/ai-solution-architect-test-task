@@ -1,14 +1,5 @@
 import type { AnySchemaObject } from 'ajv';
-
-export interface IPrompt {
-  v: number;
-  code: string;
-  stepCode: string;
-  variant: string;
-  system: string;
-  userTemplate: string;
-  isActive: boolean;
-}
+import type { IPrompt } from '../../prompt/types';
 
 export interface IStepValidation {
   validateInputSchema: boolean;

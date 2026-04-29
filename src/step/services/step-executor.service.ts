@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import Ajv, { ErrorObject } from 'ajv';
+import type { IPrompt } from '../../prompt/types';
 import { STEP_EXECUTOR_LLM_CLIENT } from '../constants';
 import {
-  IPrompt,
   IStep,
   IStepExecutionRequest,
   IStepExecutionResult,

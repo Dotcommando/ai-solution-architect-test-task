@@ -1,4 +1,5 @@
-import { IPrompt, IStep } from '../types';
+import { IPrompt } from '../../prompt/types';
+import { IStep } from '../types';
 import { StepExecutorService } from './step-executor.service';
 
 interface ITestLlmClient {

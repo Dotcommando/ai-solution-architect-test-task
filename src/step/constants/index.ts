@@ -1,1 +1,2 @@
 export const STEP_EXECUTOR_LLM_CLIENT = 'STEP_EXECUTOR_LLM_CLIENT';
+export const STEP_COLLECTION_NAME = 'steps';
