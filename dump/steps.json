@@ -779,5 +779,462 @@
       "validateOutputSchema": true
     },
     "isActive": true
+  },
+  {
+    "v": 1,
+    "name": "Resolving Gaps",
+    "purpose": "Convert gap analysis findings into explicit implementation decisions that downstream stages can use without reinterpreting ambiguous gaps.",
+    "code": "resolving_gaps",
+    "promptCode": "resolving_gaps",
+    "promptVariant": "control",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "$defs": {
+        "parsedComponent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "purpose": {
+              "type": "string",
+              "minLength": 1
+            },
+            "statePolicy": {
+              "enum": [
+                "dumb",
+                "smart"
+              ]
+            },
+            "type": {
+              "enum": [
+                "action",
+                "badge",
+                "button",
+                "card",
+                "field",
+                "file_upload",
+                "form",
+                "icon",
+                "modal",
+                "page",
+                "pagination",
+                "status",
+                "step_indicator",
+                "table",
+                "wizard"
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "name",
+            "parentCode",
+            "purpose",
+            "statePolicy",
+            "type"
+          ]
+        },
+        "parsedConstraint": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "componentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "enum": [
+                "file_size",
+                "file_type",
+                "masking",
+                "navigation",
+                "pagination",
+                "sorting",
+                "state"
+              ]
+            }
+          },
+          "required": [
+            "componentCode",
+            "description",
+            "type"
+          ]
+        },
+        "parsedContent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isRequired": {
+              "type": "boolean"
+            },
+            "kind": {
+              "enum": [
+                "action",
+                "column",
+                "field",
+                "icon",
+                "status",
+                "step"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "code",
+            "componentCode",
+            "description",
+            "isRequired",
+            "kind",
+            "name"
+          ]
+        },
+        "parsedInteraction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "targetComponentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "enum": [
+                "delete",
+                "drag_and_drop",
+                "next",
+                "open_details",
+                "paginate",
+                "pick_file",
+                "previous",
+                "select",
+                "sort"
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "componentCode",
+            "description",
+            "targetComponentCode",
+            "type"
+          ]
+        },
+        "parsedState": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "isExplicit": {
+              "type": "boolean"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "code",
+            "componentCode",
+            "description",
+            "isExplicit",
+            "name"
+          ]
+        },
+        "parsedTokenReference": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "componentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "type": {
+              "enum": [
+                "color",
+                "font",
+                "icon",
+                "radius",
+                "shadow",
+                "spacing",
+                "typography"
+              ]
+            }
+          },
+          "required": [
+            "componentCode",
+            "description",
+            "name",
+            "type"
+          ]
+        },
+        "parsingOutput": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "businessContext": {
+              "type": "string",
+              "minLength": 1
+            },
+            "components": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/parsedComponent"
+              }
+            },
+            "constraints": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/parsedConstraint"
+              }
+            },
+            "content": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/parsedContent"
+              }
+            },
+            "interactions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/parsedInteraction"
+              }
+            },
+            "rootComponentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "specifiedStates": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/parsedState"
+              }
+            },
+            "tokenReferences": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/parsedTokenReference"
+              }
+            }
+          },
+          "required": [
+            "businessContext",
+            "components",
+            "constraints",
+            "content",
+            "interactions",
+            "rootComponentCode",
+            "specifiedStates",
+            "tokenReferences"
+          ]
+        },
+        "gapAnalysisOutput": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "accessibilityGaps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "missingStates": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "recommendations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "responsiveGaps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "accessibilityGaps",
+            "missingStates",
+            "recommendations",
+            "responsiveGaps"
+          ]
+        }
+      },
+      "properties": {
+        "componentDescription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gapAnalysis": {
+          "$ref": "#/$defs/gapAnalysisOutput"
+        },
+        "parsing": {
+          "$ref": "#/$defs/parsingOutput"
+        }
+      },
+      "required": [
+        "componentDescription",
+        "gapAnalysis",
+        "parsing"
+      ]
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "$defs": {
+        "resolvedGapDecision": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "affectedComponentCodes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "decision": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "sourceGap": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "affectedComponentCodes",
+            "code",
+            "decision",
+            "rationale",
+            "sourceGap"
+          ]
+        }
+      },
+      "properties": {
+        "decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resolvedGapDecision"
+          }
+        }
+      },
+      "required": [
+        "decisions"
+      ]
+    },
+    "maxRetries": 2,
+    "validation": {
+      "validateInputSchema": true,
+      "validateOutputSchema": true
+    },
+    "isActive": true
   }
 ]

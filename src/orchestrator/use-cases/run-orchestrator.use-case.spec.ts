@@ -1,5 +1,6 @@
 import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-analysis-step.use-case';
 import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
+import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
 import { RUN_STATUS } from '../../run/constants';
 import { RunRepository } from '../../run/repositories/run.repository';
 import { RunOrchestratorUseCase } from './run-orchestrator.use-case';
@@ -33,10 +34,20 @@ describe('RunOrchestratorUseCase', () => {
     };
   };
 
+  const createRunResolvingGapsStepUseCaseMock = (): Pick<
+    RunResolvingGapsStepUseCase,
+    'execute'
+  > => {
+    return {
+      execute: jest.fn(),
+    };
+  };
+
   it('creates a run, executes parsing, and persists progress', async () => {
     const runRepository = createRunRepositoryMock();
     const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();
     const runParsingStepUseCase = createRunParsingStepUseCaseMock();
+    const runResolvingGapsStepUseCase = createRunResolvingGapsStepUseCaseMock();
 
     runRepository.create = jest.fn().mockResolvedValue('run-id-1');
     runRepository.updateById = jest.fn().mockResolvedValue(null);
@@ -73,11 +84,27 @@ describe('RunOrchestratorUseCase', () => {
       },
       rawOutput: '{"missingStates":["Selected state is not explicitly defined."]}',
     });
+    runResolvingGapsStepUseCase.execute = jest.fn().mockResolvedValue({
+      attempts: 1,
+      output: {
+        decisions: [
+          {
+            affectedComponentCodes: ['payment_card'],
+            code: 'define_selected_state',
+            decision: 'Add an explicit selected state for the payment card.',
+            rationale: 'This resolves the missing selection-state gap and supports downstream implementation work.',
+            sourceGap: 'Selected state is not explicitly defined.',
+          },
+        ],
+      },
+      rawOutput: '{"decisions":[{"code":"define_selected_state"}]}',
+    });
 
     const useCase = new RunOrchestratorUseCase(
       runRepository as RunRepository,
       runGapAnalysisStepUseCase as RunGapAnalysisStepUseCase,
       runParsingStepUseCase as RunParsingStepUseCase,
+      runResolvingGapsStepUseCase as RunResolvingGapsStepUseCase,
     );
 
     await expect(
@@ -122,6 +149,15 @@ describe('RunOrchestratorUseCase', () => {
         businessContext: 'merchant dashboard',
       }),
     });
+    expect(runResolvingGapsStepUseCase.execute).toHaveBeenCalledWith({
+      componentDescription: 'Payment card component.',
+      gapAnalysis: expect.objectContaining({
+        missingStates: ['Selected state is not explicitly defined.'],
+      }),
+      parsing: expect.objectContaining({
+        businessContext: 'merchant dashboard',
+      }),
+    });
     expect(runRepository.create).toHaveBeenCalledWith({
       input: {
         componentDescription: 'Payment card component.',
@@ -129,7 +165,7 @@ describe('RunOrchestratorUseCase', () => {
         screenshotUrl: null,
       },
     });
-    expect(runRepository.updateById).toHaveBeenCalledTimes(4);
+    expect(runRepository.updateById).toHaveBeenCalledTimes(5);
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -185,6 +221,36 @@ describe('RunOrchestratorUseCase', () => {
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
       4,
       expect.objectContaining({
+        artifacts: expect.objectContaining({
+          gapAnalysis: expect.objectContaining({
+            missingStates: ['Selected state is not explicitly defined.'],
+          }),
+          resolvingGaps: expect.objectContaining({
+            decisions: [
+              expect.objectContaining({
+                code: 'define_selected_state',
+              }),
+            ],
+          }),
+        }),
+        id: 'run-id-1',
+        steps: [
+          expect.objectContaining({
+            code: 'parsing',
+          }),
+          expect.objectContaining({
+            code: 'gap_analysis',
+          }),
+          expect.objectContaining({
+            code: 'resolving_gaps',
+            status: 'completed',
+          }),
+        ],
+      }),
+    );
+    expect(runRepository.updateById).toHaveBeenNthCalledWith(
+      5,
+      expect.objectContaining({
         id: 'run-id-1',
         status: RUN_STATUS.COMPLETED,
       }),
@@ -195,6 +261,7 @@ describe('RunOrchestratorUseCase', () => {
     const runRepository = createRunRepositoryMock();
     const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();
     const runParsingStepUseCase = createRunParsingStepUseCaseMock();
+    const runResolvingGapsStepUseCase = createRunResolvingGapsStepUseCaseMock();
     const error = new Error('Step execution failed', {
       cause: new Error('Output schema validation failed'),
     });
@@ -207,6 +274,7 @@ describe('RunOrchestratorUseCase', () => {
       runRepository as RunRepository,
       runGapAnalysisStepUseCase as RunGapAnalysisStepUseCase,
       runParsingStepUseCase as RunParsingStepUseCase,
+      runResolvingGapsStepUseCase as RunResolvingGapsStepUseCase,
     );
 
     await expect(

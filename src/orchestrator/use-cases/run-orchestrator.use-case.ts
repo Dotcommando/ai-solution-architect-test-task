@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-analysis-step.use-case';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
+import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
+import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
 import { RUN_FINAL_COMPONENT_TYPE, RUN_STATUS, RUN_STEP_CODE, RUN_STEP_STATUS } from '../../run/constants';
 import { RunRepository } from '../../run/repositories/run.repository';
 import {
@@ -20,6 +22,7 @@ export class RunOrchestratorUseCase {
     private readonly runRepository: RunRepository,
     private readonly runGapAnalysisStepUseCase: RunGapAnalysisStepUseCase,
     private readonly runParsingStepUseCase: RunParsingStepUseCase,
+    private readonly runResolvingGapsStepUseCase: RunResolvingGapsStepUseCase,
   ) {}
 
   async run(
@@ -38,6 +41,7 @@ export class RunOrchestratorUseCase {
       const parsingStepReport = this.buildParsingStepReport(
         request,
         parsingResult.attempts,
+        parsingResult.output,
         parsingResult.rawOutput,
       );
 
@@ -61,6 +65,7 @@ export class RunOrchestratorUseCase {
         this.buildGapAnalysisStepReport(
           request,
           gapAnalysisResult.attempts,
+          gapAnalysisResult.output,
           gapAnalysisResult.rawOutput,
         ),
       );
@@ -72,7 +77,32 @@ export class RunOrchestratorUseCase {
         stepsWithGapAnalysis,
       );
 
-      // await this.runResolvingGapsStage(runId);
+      const resolvingGapsResult = await this.runResolvingGapsStage(
+        request,
+        parsingResult.output,
+        gapAnalysisResult.output,
+      );
+      const artifactsWithResolvingGaps = this.buildArtifactsWithResolvingGaps(
+        artifactsWithGapAnalysis,
+        resolvingGapsResult.output,
+      );
+      const stepsWithResolvingGaps = this.appendStepReport(
+        stepsWithGapAnalysis,
+        this.buildResolvingGapsStepReport(
+          request,
+          resolvingGapsResult.attempts,
+          resolvingGapsResult.output,
+          resolvingGapsResult.rawOutput,
+        ),
+      );
+
+      await this.saveResolvingGapsStageResult(
+        runId,
+        artifactsWithResolvingGaps,
+        parsingDerivedData,
+        stepsWithResolvingGaps,
+      );
+
       // await this.runUserFlowsStage(runId);
       // await this.runComponentInterfacesStage(runId);
       // await this.runUnitTestsStage(runId);
@@ -137,6 +167,18 @@ export class RunOrchestratorUseCase {
     });
   }
 
+  private async runResolvingGapsStage(
+    request: IRunOrchestratorRequest,
+    parsing: IRunOrchestratorResponse['parsing'],
+    gapAnalysis: IGapAnalysisStepOutput,
+  ): ReturnType<RunResolvingGapsStepUseCase['execute']> {
+    return this.runResolvingGapsStepUseCase.execute({
+      componentDescription: request.componentDescription,
+      gapAnalysis,
+      parsing,
+    });
+  }
+
   private buildArtifactsFromParsing(
     parsingOutput: IRunOrchestratorResponse['parsing'],
   ): IRunArtifacts {
@@ -160,6 +202,16 @@ export class RunOrchestratorUseCase {
     return {
       ...artifacts,
       gapAnalysis: gapAnalysisOutput,
+    };
+  }
+
+  private buildArtifactsWithResolvingGaps(
+    artifacts: IRunArtifacts,
+    resolvingGapsOutput: IResolvingGapsStepOutput,
+  ): IRunArtifacts {
+    return {
+      ...artifacts,
+      resolvingGaps: resolvingGapsOutput,
     };
   }
 
@@ -192,6 +244,7 @@ export class RunOrchestratorUseCase {
   private buildParsingStepReport(
     request: IRunOrchestratorRequest,
     attempts: number,
+    output: IRunOrchestratorResponse['parsing'],
     rawOutput: string,
   ): IRunStepReport {
     const now = new Date();
@@ -209,7 +262,7 @@ export class RunOrchestratorUseCase {
         provider: 'openai',
       },
       order: 1,
-      outputJson: rawOutput,
+      outputJson: this.serializeOutputJson(output),
       prompt: {
         code: 'parsing',
         variant: 'control',
@@ -226,6 +279,7 @@ export class RunOrchestratorUseCase {
   private buildGapAnalysisStepReport(
     request: IRunOrchestratorRequest,
     attempts: number,
+    output: IGapAnalysisStepOutput,
     rawOutput: string,
   ): IRunStepReport {
     const now = new Date();
@@ -245,9 +299,46 @@ export class RunOrchestratorUseCase {
         provider: 'openai',
       },
       order: 2,
-      outputJson: rawOutput,
+      outputJson: this.serializeOutputJson(output),
       prompt: {
         code: 'gap_analysis',
+        variant: 'control',
+        version: null,
+      },
+      rawOutput,
+      startedAt: now,
+      status: RUN_STEP_STATUS.COMPLETED,
+      targetComponentCode: null,
+      tokenUsage: this.buildEmptyStepTokenUsage(),
+    };
+  }
+
+  private buildResolvingGapsStepReport(
+    request: IRunOrchestratorRequest,
+    attempts: number,
+    output: IResolvingGapsStepOutput,
+    rawOutput: string,
+  ): IRunStepReport {
+    const now = new Date();
+
+    return {
+      attempts,
+      code: RUN_STEP_CODE.RESOLVING_GAPS,
+      completedAt: now,
+      durationMs: null,
+      errorDetails: null,
+      errorMessage: null,
+      inputJson: JSON.stringify({
+        componentDescription: request.componentDescription,
+      }),
+      model: {
+        model: null,
+        provider: 'openai',
+      },
+      order: 3,
+      outputJson: this.serializeOutputJson(output),
+      prompt: {
+        code: 'resolving_gaps',
         variant: 'control',
         version: null,
       },
@@ -270,6 +361,21 @@ export class RunOrchestratorUseCase {
   }
 
   private async saveParsingStageResult(
+    runId: string,
+    artifacts: IRunArtifacts,
+    derivedData: IRunDerivedData,
+    steps: IRunStepReport[],
+  ): Promise<void> {
+    await this.runRepository.updateById({
+      artifacts,
+      derivedData,
+      id: runId,
+      steps,
+      tokenUsageTotals: this.buildTokenUsageTotals(steps),
+    });
+  }
+
+  private async saveResolvingGapsStageResult(
     runId: string,
     artifacts: IRunArtifacts,
     derivedData: IRunDerivedData,
@@ -346,6 +452,10 @@ export class RunOrchestratorUseCase {
       reasoningTokens: null,
       totalTokens: null,
     };
+  }
+
+  private serializeOutputJson(output: object): string {
+    return JSON.stringify(output);
   }
 
   private buildTokenUsageTotals(
