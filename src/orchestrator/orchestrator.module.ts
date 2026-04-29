@@ -4,6 +4,7 @@ import { GapAnalysisModule } from '../gap-analysis/gap-analysis.module';
 import { ParsingModule } from '../parsing/parsing.module';
 import { ResolvingGapsModule } from '../resolving-gaps/resolving-gaps.module';
 import { RunModule } from '../run/run.module';
+import { UnitTestsModule } from '../unit-tests/unit-tests.module';
 import { UserFlowsModule } from '../user-flows/user-flows.module';
 import { RunOrchestratorUseCase } from './use-cases/run-orchestrator.use-case';
 
@@ -15,6 +16,7 @@ import { RunOrchestratorUseCase } from './use-cases/run-orchestrator.use-case';
     ParsingModule,
     ResolvingGapsModule,
     RunModule,
+    UnitTestsModule,
     UserFlowsModule,
   ],
   providers: [RunOrchestratorUseCase],

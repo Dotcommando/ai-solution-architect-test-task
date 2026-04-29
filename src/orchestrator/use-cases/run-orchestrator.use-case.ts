@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { RunComponentInterfacesStepUseCase } from '../../component-interfaces/use-cases/run-component-interfaces-step.use-case';
 import {
@@ -8,7 +9,12 @@ import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
 import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
 import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
-import { RUN_FINAL_COMPONENT_TYPE, RUN_STATUS, RUN_STEP_CODE, RUN_STEP_STATUS } from '../../run/constants';
+import {
+  RUN_FINAL_COMPONENT_TYPE,
+  RUN_STATUS,
+  RUN_STEP_CODE,
+  RUN_STEP_STATUS,
+} from '../../run/constants';
 import { RunRepository } from '../../run/repositories/run.repository';
 import {
   IRunArtifacts,
@@ -22,10 +28,25 @@ import {
   IParsedComponent,
   UI_COMPONENT_TYPE,
 } from '../../types';
+import {
+  UNIT_TESTS_DEFAULT_FRAMEWORK,
+  UNIT_TESTS_DEFAULT_PROJECT_DIRECTORY,
+  UNIT_TESTS_DEFAULT_TEST_FRAMEWORK,
+} from '../../unit-tests/constants';
+import {
+  IComponentFileReference,
+  IRunUnitTestsStepUseCaseRequest,
+  IUnitTestsStepInput,
+  IUnitTestsStepOutput,
+} from '../../unit-tests/types';
+import { RunUnitTestsStepUseCase } from '../../unit-tests/use-cases/run-unit-tests-step.use-case';
 import { RunUserFlowsStepUseCase } from '../../user-flows/use-cases/run-user-flows-step.use-case';
 import { IUserFlowsStepOutput } from '../../user-flows/types';
 import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
-import type { IRunOrchestratorRequest, IRunOrchestratorResponse } from '../types';
+import type {
+  IRunOrchestratorRequest,
+  IRunOrchestratorResponse,
+} from '../types';
 
 @Injectable()
 export class RunOrchestratorUseCase {
@@ -36,6 +57,7 @@ export class RunOrchestratorUseCase {
     private readonly runResolvingGapsStepUseCase: RunResolvingGapsStepUseCase,
     private readonly runUserFlowsStepUseCase: RunUserFlowsStepUseCase,
     private readonly runComponentInterfacesStepUseCase: RunComponentInterfacesStepUseCase,
+    private readonly runUnitTestsStepUseCase: RunUnitTestsStepUseCase,
   ) {}
 
   async run(
@@ -47,7 +69,9 @@ export class RunOrchestratorUseCase {
       await this.markRunAsStarted(runId);
 
       const parsingResult = await this.runParsingStage(request);
-      const parsingArtifacts = this.buildArtifactsFromParsing(parsingResult.output);
+      const parsingArtifacts = this.buildArtifactsFromParsing(
+        parsingResult.output,
+      );
       const parsingDerivedData = this.buildDerivedDataFromParsing(
         parsingResult.output,
       );
@@ -150,22 +174,23 @@ export class RunOrchestratorUseCase {
       let stepsWithComponentInterfaces = stepsWithUserFlows;
 
       for (const targetComponent of orderedComponents) {
-        const componentInterfacesInput = this.buildComponentInterfacesStageInput(
-          request,
-          parsingResult.output,
-          gapAnalysisResult.output,
-          resolvingGapsResult.output,
-          targetComponent,
-          userFlowsResult.output,
-        );
-        const componentInterfacesResult = await this.runComponentInterfacesStage(
-          componentInterfacesInput,
-        );
+        const componentInterfacesInput =
+          this.buildComponentInterfacesStageInput(
+            request,
+            parsingResult.output,
+            gapAnalysisResult.output,
+            resolvingGapsResult.output,
+            targetComponent,
+            userFlowsResult.output,
+          );
+        const componentInterfacesResult =
+          await this.runComponentInterfacesStage(componentInterfacesInput);
 
-        artifactsWithComponentInterfaces = this.buildArtifactsWithComponentInterface(
-          artifactsWithComponentInterfaces,
-          componentInterfacesResult.output,
-        );
+        artifactsWithComponentInterfaces =
+          this.buildArtifactsWithComponentInterface(
+            artifactsWithComponentInterfaces,
+            componentInterfacesResult.output,
+          );
         stepsWithComponentInterfaces = this.appendStepReport(
           stepsWithComponentInterfaces,
           this.buildComponentInterfacesStepReport(
@@ -185,7 +210,77 @@ export class RunOrchestratorUseCase {
         );
       }
 
-      // await this.runUnitTestsStage(runId);
+      const componentInterfaces =
+        artifactsWithComponentInterfaces.componentInterfaces;
+
+      if (componentInterfaces === null) {
+        throw new Error(
+          'Component interfaces artifact is required for unit tests',
+        );
+      }
+
+      const projectRootPath = this.buildUnitTestsProjectRootPath();
+      const componentSourceFiles = this.buildComponentSourceFiles(
+        projectRootPath,
+        orderedComponents,
+      );
+      let artifactsWithUnitTests = artifactsWithComponentInterfaces;
+      let stepsWithUnitTests = stepsWithComponentInterfaces;
+
+      for (const targetComponent of orderedComponents) {
+        const targetComponentInterface = this.findComponentInterface(
+          componentInterfaces.components,
+          targetComponent.code,
+        );
+        const targetSourceFilePath = this.findComponentSourceFile(
+          componentSourceFiles,
+          targetComponent.code,
+        );
+        const targetTestFilePath = this.buildComponentTestFilePath(
+          projectRootPath,
+          targetComponent,
+        );
+        const unitTestsInput = this.buildUnitTestsStageInput({
+          componentDescription: request.componentDescription,
+          componentInterfaces,
+          componentSourceFiles,
+          framework: UNIT_TESTS_DEFAULT_FRAMEWORK,
+          gapAnalysis: gapAnalysisResult.output,
+          parsing: parsingResult.output,
+          projectRootPath,
+          resolvingGaps: resolvingGapsResult.output,
+          targetComponent,
+          targetComponentInterface,
+          targetSourceFilePath,
+          targetTestFilePath,
+          testFramework: UNIT_TESTS_DEFAULT_TEST_FRAMEWORK,
+          userFlows: userFlowsResult.output,
+        });
+        const unitTestsResult = await this.runUnitTestsStage(unitTestsInput);
+
+        artifactsWithUnitTests = this.buildArtifactsWithUnitTest(
+          artifactsWithUnitTests,
+          unitTestsResult.output,
+        );
+        stepsWithUnitTests = this.appendStepReport(
+          stepsWithUnitTests,
+          this.buildUnitTestsStepReport(
+            unitTestsInput,
+            unitTestsResult.attempts,
+            unitTestsResult.output,
+            unitTestsResult.rawOutput,
+            stepsWithUnitTests.length + 1,
+          ),
+        );
+
+        await this.saveUnitTestsStageResult(
+          runId,
+          artifactsWithUnitTests,
+          parsingDerivedData,
+          stepsWithUnitTests,
+        );
+      }
+
       // await this.runE2eTestsStage(runId);
       // await this.runComponentGenerationStage(runId);
       // await this.runValidationStage(runId);
@@ -279,6 +374,12 @@ export class RunOrchestratorUseCase {
     return this.runComponentInterfacesStepUseCase.execute(input);
   }
 
+  private async runUnitTestsStage(
+    input: IUnitTestsStepInput,
+  ): ReturnType<RunUnitTestsStepUseCase['execute']> {
+    return this.runUnitTestsStepUseCase.execute(input);
+  }
+
   private buildArtifactsFromParsing(
     parsingOutput: IRunOrchestratorResponse['parsing'],
   ): IRunArtifacts {
@@ -334,10 +435,21 @@ export class RunOrchestratorUseCase {
     return {
       ...artifacts,
       componentInterfaces: {
-        components: [
-          ...existingComponents,
-          componentInterfaceOutput,
-        ],
+        components: [...existingComponents, componentInterfaceOutput],
+      },
+    };
+  }
+
+  private buildArtifactsWithUnitTest(
+    artifacts: IRunArtifacts,
+    unitTestOutput: IUnitTestsStepOutput,
+  ): IRunArtifacts {
+    const existingComponents = artifacts.unitTests?.components ?? [];
+
+    return {
+      ...artifacts,
+      unitTests: {
+        components: [...existingComponents, unitTestOutput],
       },
     };
   }
@@ -345,9 +457,10 @@ export class RunOrchestratorUseCase {
   private buildDerivedDataFromParsing(
     parsingOutput: IRunOrchestratorResponse['parsing'],
   ): IRunDerivedData {
-    const rootComponent = parsingOutput.components.find((component) => {
-      return component.code === parsingOutput.rootComponentCode;
-    }) ?? null;
+    const rootComponent =
+      parsingOutput.components.find((component) => {
+        return component.code === parsingOutput.rootComponentCode;
+      }) ?? null;
 
     return {
       constraintDescriptions: parsingOutput.constraints.map((constraint) => {
@@ -356,9 +469,11 @@ export class RunOrchestratorUseCase {
       extractionConstraints: parsingOutput.constraints,
       extractionSpecifiedStates: parsingOutput.specifiedStates,
       extractionTokenReferences: parsingOutput.tokenReferences,
-      referencedTokenNames: parsingOutput.tokenReferences.map((tokenReference) => {
-        return tokenReference.name;
-      }),
+      referencedTokenNames: parsingOutput.tokenReferences.map(
+        (tokenReference) => {
+          return tokenReference.name;
+        },
+      ),
       rootComponent,
       rootComponentName: rootComponent?.name ?? null,
       rootComponentType: this.mapRootComponentType(rootComponent?.type),
@@ -550,6 +665,42 @@ export class RunOrchestratorUseCase {
     };
   }
 
+  private buildUnitTestsStepReport(
+    input: IUnitTestsStepInput,
+    attempts: number,
+    output: IUnitTestsStepOutput,
+    rawOutput: string,
+    order: number,
+  ): IRunStepReport {
+    const now = new Date();
+
+    return {
+      attempts,
+      code: RUN_STEP_CODE.UNIT_TESTS,
+      completedAt: now,
+      durationMs: null,
+      errorDetails: null,
+      errorMessage: null,
+      inputJson: JSON.stringify(input),
+      model: {
+        model: null,
+        provider: 'openai',
+      },
+      order,
+      outputJson: this.serializeOutputJson(output),
+      prompt: {
+        code: 'unit_tests',
+        variant: 'control',
+        version: null,
+      },
+      rawOutput,
+      startedAt: now,
+      status: RUN_STEP_STATUS.COMPLETED,
+      targetComponentCode: output.componentCode,
+      tokenUsage: this.buildEmptyStepTokenUsage(),
+    };
+  }
+
   private buildComponentInterfacesStageInput(
     request: IRunOrchestratorRequest,
     parsing: IRunOrchestratorResponse['parsing'],
@@ -568,6 +719,27 @@ export class RunOrchestratorUseCase {
     };
   }
 
+  private buildUnitTestsStageInput(
+    request: IRunUnitTestsStepUseCaseRequest,
+  ): IUnitTestsStepInput {
+    return {
+      componentDescription: request.componentDescription,
+      componentInterfaces: request.componentInterfaces,
+      componentSourceFiles: request.componentSourceFiles,
+      framework: request.framework,
+      gapAnalysis: request.gapAnalysis,
+      parsing: request.parsing,
+      projectRootPath: request.projectRootPath,
+      resolvingGaps: request.resolvingGaps,
+      targetComponent: request.targetComponent,
+      targetComponentInterface: request.targetComponentInterface,
+      targetSourceFilePath: request.targetSourceFilePath,
+      targetTestFilePath: request.targetTestFilePath,
+      testFramework: request.testFramework,
+      userFlows: request.userFlows,
+    };
+  }
+
   private orderComponentsForInterfaces(
     components: IParsedComponent[],
   ): IParsedComponent[] {
@@ -578,20 +750,106 @@ export class RunOrchestratorUseCase {
       return component.statePolicy === COMPONENT_STATE_POLICY.SMART;
     });
 
-    return [
-      ...dumbComponents,
-      ...smartComponents,
-    ];
+    return [...dumbComponents, ...smartComponents];
+  }
+
+  private buildUnitTestsProjectRootPath(): string {
+    return join(process.cwd(), UNIT_TESTS_DEFAULT_PROJECT_DIRECTORY);
+  }
+
+  private buildComponentSourceFiles(
+    projectRootPath: string,
+    components: IParsedComponent[],
+  ): IComponentFileReference[] {
+    return components.map((component) => {
+      return {
+        componentCode: component.code,
+        filename: this.buildComponentSourceFilePath(projectRootPath, component),
+      };
+    });
+  }
+
+  private buildComponentSourceFilePath(
+    projectRootPath: string,
+    component: IParsedComponent,
+  ): string {
+    const componentFileName = this.buildComponentFileName(component.code);
+
+    return join(
+      projectRootPath,
+      'src',
+      'components',
+      componentFileName,
+      `${componentFileName}.tsx`,
+    );
+  }
+
+  private buildComponentTestFilePath(
+    projectRootPath: string,
+    component: IParsedComponent,
+  ): string {
+    const componentFileName = this.buildComponentFileName(component.code);
+
+    return join(
+      projectRootPath,
+      'src',
+      'components',
+      componentFileName,
+      `${componentFileName}.spec.tsx`,
+    );
+  }
+
+  private buildComponentFileName(componentCode: string): string {
+    return componentCode
+      .split('_')
+      .filter((segment) => {
+        return segment !== '';
+      })
+      .map((segment) => {
+        return `${segment.charAt(0).toUpperCase()}${segment.slice(1)}`;
+      })
+      .join('');
+  }
+
+  private findComponentInterface(
+    componentInterfaces: IComponentInterfacesStepOutput[],
+    componentCode: string,
+  ): IComponentInterfacesStepOutput {
+    const componentInterface = componentInterfaces.find((item) => {
+      return item.componentCode === componentCode;
+    });
+
+    if (componentInterface === undefined) {
+      throw new Error(
+        `Missing component interface artifact for component "${componentCode}"`,
+      );
+    }
+
+    return componentInterface;
+  }
+
+  private findComponentSourceFile(
+    componentSourceFiles: IComponentFileReference[],
+    componentCode: string,
+  ): string {
+    const componentSourceFile = componentSourceFiles.find((item) => {
+      return item.componentCode === componentCode;
+    });
+
+    if (componentSourceFile === undefined) {
+      throw new Error(
+        `Missing component source file for component "${componentCode}"`,
+      );
+    }
+
+    return componentSourceFile.filename;
   }
 
   private appendStepReport(
     steps: IRunStepReport[],
     stepReport: IRunStepReport,
   ): IRunStepReport[] {
-    return [
-      ...steps,
-      stepReport,
-    ];
+    return [...steps, stepReport];
   }
 
   private async saveParsingStageResult(
@@ -654,6 +912,21 @@ export class RunOrchestratorUseCase {
     });
   }
 
+  private async saveUnitTestsStageResult(
+    runId: string,
+    artifacts: IRunArtifacts,
+    derivedData: IRunDerivedData,
+    steps: IRunStepReport[],
+  ): Promise<void> {
+    await this.runRepository.updateById({
+      artifacts,
+      derivedData,
+      id: runId,
+      steps,
+      tokenUsageTotals: this.buildTokenUsageTotals(steps),
+    });
+  }
+
   private async saveGapAnalysisStageResult(
     runId: string,
     artifacts: IRunArtifacts,
@@ -677,10 +950,7 @@ export class RunOrchestratorUseCase {
     });
   }
 
-  private async markRunAsFailed(
-    runId: string,
-    error: unknown,
-  ): Promise<void> {
+  private async markRunAsFailed(runId: string, error: unknown): Promise<void> {
     const normalizedError = this.normalizeError(error);
 
     await this.runRepository.updateById({
@@ -722,22 +992,18 @@ export class RunOrchestratorUseCase {
     return JSON.stringify(output);
   }
 
-  private buildTokenUsageTotals(
-    steps: IRunStepReport[],
-  ): IRunTokenUsageTotals {
+  private buildTokenUsageTotals(steps: IRunStepReport[]): IRunTokenUsageTotals {
     return steps.reduce<IRunTokenUsageTotals>(
       (totals, step) => {
         return {
           cachedInputTokens:
             totals.cachedInputTokens + (step.tokenUsage.cachedInputTokens ?? 0),
-          inputTokens:
-            totals.inputTokens + (step.tokenUsage.inputTokens ?? 0),
+          inputTokens: totals.inputTokens + (step.tokenUsage.inputTokens ?? 0),
           outputTokens:
             totals.outputTokens + (step.tokenUsage.outputTokens ?? 0),
           reasoningTokens:
             totals.reasoningTokens + (step.tokenUsage.reasoningTokens ?? 0),
-          totalTokens:
-            totals.totalTokens + (step.tokenUsage.totalTokens ?? 0),
+          totalTokens: totals.totalTokens + (step.tokenUsage.totalTokens ?? 0),
         };
       },
       {
