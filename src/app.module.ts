@@ -5,6 +5,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApplicationExceptionFilter } from './common/filters/application-exception.filter';
+import { OrchestratorModule } from './orchestrator/orchestrator.module';
 import { ParsingModule } from './parsing/parsing.module';
 import { RunModule } from './run/run.module';
 
@@ -22,7 +23,7 @@ import { RunModule } from './run/run.module';
         };
       },
     }),
-    ParsingModule,
+    OrchestratorModule,
     RunModule,
   ],
   controllers: [AppController],

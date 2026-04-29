@@ -1,18 +1,13 @@
+import { ICreateComponentResponseInput } from '../../app/types';
 import { IParsingStepOutput } from '../../types';
 
-export interface ICreateComponentRequest {
-  componentDescription: string;
-  figmaUrl?: string | null;
-  screenshotUrl?: string | null;
-}
-
-export interface ICreateComponentResponseInput {
+export interface IRunOrchestratorRequest {
   componentDescription: string;
   figmaUrl: string | null;
   screenshotUrl: string | null;
 }
 
-export interface ICreateComponentResponse {
+export interface IRunOrchestratorResponse {
   attempts: number;
   input: ICreateComponentResponseInput;
   parsing: IParsingStepOutput;

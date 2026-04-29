@@ -6,7 +6,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { AppService } from './app.service';
-import { RunParsingStepUseCase } from './parsing/use-cases/run-parsing-step.use-case';
+import { RunOrchestratorUseCase } from './orchestrator/use-cases/run-orchestrator.use-case';
 import type {
   ICreateComponentRequest,
   ICreateComponentResponse,
@@ -17,7 +17,7 @@ import type {
 export class AppController {
   constructor(
     private readonly appService: AppService,
-    private readonly runParsingStepUseCase: RunParsingStepUseCase,
+    private readonly runOrchestratorUseCase: RunOrchestratorUseCase,
   ) {}
 
   @Get()
@@ -30,14 +30,7 @@ export class AppController {
     @Body() request: ICreateComponentRequest,
   ): Promise<ICreateComponentResponse> {
     const normalizedRequest = this.normalizeCreateComponentRequest(request);
-    const result = await this.runParsingStepUseCase.execute(normalizedRequest);
-
-    return {
-      attempts: result.attempts,
-      input: normalizedRequest,
-      parsing: result.output,
-      rawOutput: result.rawOutput,
-    };
+    return this.runOrchestratorUseCase.run(normalizedRequest);
   }
 
   private normalizeCreateComponentRequest(

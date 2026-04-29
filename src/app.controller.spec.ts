@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { RunParsingStepUseCase } from './parsing/use-cases/run-parsing-step.use-case';
+import { RunOrchestratorUseCase } from './orchestrator/use-cases/run-orchestrator.use-case';
 import { IParsingStepOutput } from './types';
 
 describe('AppController', () => {
   let appController: AppController;
-  let runParsingStepUseCase: Pick<RunParsingStepUseCase, 'execute'>;
+  let runOrchestratorUseCase: Pick<RunOrchestratorUseCase, 'run'>;
 
   const createParsingOutput = (): IParsingStepOutput => {
     return {
@@ -31,8 +31,8 @@ describe('AppController', () => {
   };
 
   beforeEach(async () => {
-    runParsingStepUseCase = {
-      execute: jest.fn(),
+    runOrchestratorUseCase = {
+      run: jest.fn(),
     };
 
     const app: TestingModule = await Test.createTestingModule({
@@ -40,8 +40,8 @@ describe('AppController', () => {
       providers: [
         AppService,
         {
-          provide: RunParsingStepUseCase,
-          useValue: runParsingStepUseCase,
+          provide: RunOrchestratorUseCase,
+          useValue: runOrchestratorUseCase,
         },
       ],
     }).compile();
@@ -59,10 +59,16 @@ describe('AppController', () => {
     it('normalizes the request and returns the parsing result', async () => {
       const parsingOutput = createParsingOutput();
 
-      runParsingStepUseCase.execute = jest.fn().mockResolvedValue({
+      runOrchestratorUseCase.run = jest.fn().mockResolvedValue({
         attempts: 1,
-        output: parsingOutput,
+        input: {
+          componentDescription: 'Payment card component.',
+          figmaUrl: null,
+          screenshotUrl: 'https://example.com/screenshot.png',
+        },
+        parsing: parsingOutput,
         rawOutput: '{"businessContext":"merchant dashboard"}',
+        runId: 'run-id-1',
       });
 
       await expect(
@@ -80,9 +86,10 @@ describe('AppController', () => {
         },
         parsing: parsingOutput,
         rawOutput: '{"businessContext":"merchant dashboard"}',
+        runId: 'run-id-1',
       });
 
-      expect(runParsingStepUseCase.execute).toHaveBeenCalledWith({
+      expect(runOrchestratorUseCase.run).toHaveBeenCalledWith({
         componentDescription: 'Payment card component.',
         figmaUrl: null,
         screenshotUrl: 'https://example.com/screenshot.png',
