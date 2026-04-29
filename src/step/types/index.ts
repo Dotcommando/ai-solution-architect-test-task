@@ -20,15 +20,19 @@ export interface IStep {
   isActive: boolean;
 }
 
-export interface IStepExecutionRequest {
-  input: Record<string, unknown>;
+export interface IStepExecutionRequest<
+  TInput extends object = Record<string, unknown>,
+> {
+  input: TInput;
   prompt: IPrompt;
   step: IStep;
 }
 
-export interface IStepExecutionResult {
+export interface IStepExecutionResult<
+  TOutput extends object = Record<string, unknown>,
+> {
   attempts: number;
-  output: Record<string, unknown>;
+  output: TOutput;
   rawOutput: string;
 }
 

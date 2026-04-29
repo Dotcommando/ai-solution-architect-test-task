@@ -32,6 +32,8 @@ services:
       NODE_ENV: ${NODE_ENV}
       PORT: ${PORT}
       MONGODB_URI: ${MONGODB_URI}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL}
     depends_on:
       sa-db:
         condition: service_healthy

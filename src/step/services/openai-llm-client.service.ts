@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { IStepExecutorLlmClient } from '../types';
 
 interface IOpenAiResponseOutputContent {
@@ -18,6 +19,10 @@ interface IOpenAiResponsePayload {
 @Injectable()
 export class OpenAiLlmClientService implements IStepExecutorLlmClient {
   private static readonly RESPONSES_API_URL = 'https://api.openai.com/v1/responses';
+
+  constructor(
+    private readonly configService: ConfigService,
+  ) {}
 
   async execute(systemPrompt: string, userPrompt: string): Promise<string> {
     const apiKey = this.getRequiredEnvValue('OPENAI_API_KEY');
@@ -135,9 +140,9 @@ export class OpenAiLlmClientService implements IStepExecutorLlmClient {
   }
 
   private getRequiredEnvValue(name: string): string {
-    const value = process.env[name]?.trim();
+    const value = this.configService.getOrThrow<string>(name).trim();
 
-    if (value === undefined || value === '') {
+    if (value === '') {
       throw new Error(`${name} is not configured`);
     }
 

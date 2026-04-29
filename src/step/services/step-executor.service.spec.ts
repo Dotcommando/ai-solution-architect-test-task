@@ -1,4 +1,5 @@
 import { IPrompt } from '../../prompt/types';
+import { PARSING_STEP_INPUT_SCHEMA } from '../../types';
 import { IStep } from '../types';
 import { StepExecutorService } from './step-executor.service';
 
@@ -201,5 +202,38 @@ describe('StepExecutorService', () => {
     ).rejects.toThrow('Step execution failed');
 
     expect(llmClient.execute).toHaveBeenCalledTimes(3);
+  });
+
+  it('supports draft 2020-12 schemas during input validation', async () => {
+    const llmClient = createLlmClient();
+    const service = new StepExecutorService(llmClient);
+
+    const step = createStep();
+
+    step.inputSchema = PARSING_STEP_INPUT_SCHEMA;
+
+    llmClient.execute.mockResolvedValueOnce(
+      JSON.stringify({
+        status: 'ok',
+      }),
+    );
+
+    await expect(
+      service.execute({
+        input: {
+          componentDescription: 'Payment card component.',
+          figmaUrl: null,
+          screenshotUrl: null,
+        },
+        prompt: createPrompt(),
+        step,
+      }),
+    ).resolves.toEqual({
+      attempts: 1,
+      output: {
+        status: 'ok',
+      },
+      rawOutput: '{"status":"ok"}',
+    });
   });
 });

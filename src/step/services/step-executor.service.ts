@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
-import Ajv, { ErrorObject } from 'ajv';
+import { ErrorObject } from 'ajv';
+import Ajv2020 from 'ajv/dist/2020';
 import type { IPrompt } from '../../prompt/types';
 import { STEP_EXECUTOR_LLM_CLIENT } from '../constants';
 import {
@@ -18,13 +19,13 @@ export class StepExecutionError extends Error {
 
 @Injectable()
 export class StepExecutorService {
-  private readonly ajv: Ajv;
+  private readonly ajv: Ajv2020;
 
   constructor(
     @Inject(STEP_EXECUTOR_LLM_CLIENT)
     private readonly llmClient: IStepExecutorLlmClient,
   ) {
-    this.ajv = new Ajv({
+    this.ajv = new Ajv2020({
       allErrors: true,
       strict: false,
     });
@@ -32,7 +33,13 @@ export class StepExecutorService {
 
   async execute(
     request: IStepExecutionRequest,
-  ): Promise<IStepExecutionResult> {
+  ): Promise<IStepExecutionResult>;
+  async execute<TInput extends object, TOutput extends object>(
+    request: IStepExecutionRequest<TInput>,
+  ): Promise<IStepExecutionResult<TOutput>>;
+  async execute<TInput extends object, TOutput extends object>(
+    request: IStepExecutionRequest<TInput>,
+  ): Promise<IStepExecutionResult<TOutput>> {
     this.validateInput(request.step, request.input);
 
     const baseUserPrompt = this.renderUserPrompt(request.prompt, request.input);
@@ -53,7 +60,10 @@ export class StepExecutorService {
           request.prompt.system,
           userPrompt,
         );
-        const output = this.parseAndValidateOutput(request.step, rawOutput);
+        const output = this.parseAndValidateOutput<TOutput>(
+          request.step,
+          rawOutput,
+        );
 
         return {
           attempts: attempt,
@@ -97,10 +107,10 @@ export class StepExecutorService {
     return new Error('Unknown step execution error');
   }
 
-  private parseAndValidateOutput(
+  private parseAndValidateOutput<TOutput extends object>(
     step: IStep,
     rawOutput: string,
-  ): Record<string, unknown> {
+  ): TOutput {
     const parsedOutput = this.parseJson(rawOutput);
 
     if (
@@ -122,7 +132,7 @@ export class StepExecutorService {
       );
     }
 
-    return parsedOutput;
+    return parsedOutput as TOutput;
   }
 
   private parseJson(rawOutput: string): unknown {
@@ -137,14 +147,14 @@ export class StepExecutorService {
 
   private renderUserPrompt(
     prompt: IPrompt,
-    input: Record<string, unknown>,
+    input: object,
   ): string {
     const serializedInput = JSON.stringify(input, null, 2);
 
     return prompt.userTemplate.replaceAll('{{input}}', serializedInput);
   }
 
-  private validateInput(step: IStep, input: Record<string, unknown>): void {
+  private validateInput(step: IStep, input: object): void {
     if (
       !step.validation.validateInputSchema
       || step.inputSchema === null

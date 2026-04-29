@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { OpenAiLlmClientService } from './openai-llm-client.service';
 
 interface IFetchResponseMock {
@@ -8,18 +9,19 @@ interface IFetchResponseMock {
 }
 
 describe('OpenAiLlmClientService', () => {
-  const originalApiKey = process.env.OPENAI_API_KEY;
-  const originalModel = process.env.OPENAI_MODEL;
-
   const createFetchResponseMock = (
     response: IFetchResponseMock,
   ): IFetchResponseMock => {
     return response;
   };
 
+  const createConfigServiceMock = (): Pick<ConfigService, 'getOrThrow'> => {
+    return {
+      getOrThrow: jest.fn(),
+    };
+  };
+
   beforeEach(() => {
-    process.env.OPENAI_API_KEY = 'test-api-key';
-    process.env.OPENAI_MODEL = 'gpt-5.2';
     Object.defineProperty(globalThis, 'fetch', {
       value: jest.fn(),
       writable: true,
@@ -27,15 +29,25 @@ describe('OpenAiLlmClientService', () => {
   });
 
   afterEach(() => {
-    process.env.OPENAI_API_KEY = originalApiKey;
-    process.env.OPENAI_MODEL = originalModel;
     jest.resetAllMocks();
   });
 
   it('throws when OPENAI_API_KEY is missing', async () => {
-    process.env.OPENAI_API_KEY = '';
+    const configService = createConfigServiceMock();
 
-    const service = new OpenAiLlmClientService();
+    configService.getOrThrow = jest
+      .fn()
+      .mockImplementation((key: string) => {
+        if (key === 'OPENAI_API_KEY') {
+          return ' ';
+        }
+
+        return 'gpt-5.2';
+      });
+
+    const service = new OpenAiLlmClientService(
+      configService as ConfigService,
+    );
 
     await expect(
       service.execute('system prompt', 'user prompt'),
@@ -43,9 +55,21 @@ describe('OpenAiLlmClientService', () => {
   });
 
   it('throws when OPENAI_MODEL is missing', async () => {
-    process.env.OPENAI_MODEL = '';
+    const configService = createConfigServiceMock();
 
-    const service = new OpenAiLlmClientService();
+    configService.getOrThrow = jest
+      .fn()
+      .mockImplementation((key: string) => {
+        if (key === 'OPENAI_MODEL') {
+          return ' ';
+        }
+
+        return 'test-api-key';
+      });
+
+    const service = new OpenAiLlmClientService(
+      configService as ConfigService,
+    );
 
     await expect(
       service.execute('system prompt', 'user prompt'),
@@ -90,7 +114,25 @@ describe('OpenAiLlmClientService', () => {
       writable: true,
     });
 
-    const service = new OpenAiLlmClientService();
+    const configService = createConfigServiceMock();
+
+    configService.getOrThrow = jest
+      .fn()
+      .mockImplementation((key: string) => {
+        if (key === 'OPENAI_API_KEY') {
+          return 'test-api-key';
+        }
+
+        if (key === 'OPENAI_MODEL') {
+          return 'gpt-5.2';
+        }
+
+        throw new Error(`Unexpected config key: ${key}`);
+      });
+
+    const service = new OpenAiLlmClientService(
+      configService as ConfigService,
+    );
 
     await expect(
       service.execute('system prompt', 'user prompt'),
@@ -162,7 +204,25 @@ describe('OpenAiLlmClientService', () => {
       writable: true,
     });
 
-    const service = new OpenAiLlmClientService();
+    const configService = createConfigServiceMock();
+
+    configService.getOrThrow = jest
+      .fn()
+      .mockImplementation((key: string) => {
+        if (key === 'OPENAI_API_KEY') {
+          return 'test-api-key';
+        }
+
+        if (key === 'OPENAI_MODEL') {
+          return 'gpt-5.2';
+        }
+
+        throw new Error(`Unexpected config key: ${key}`);
+      });
+
+    const service = new OpenAiLlmClientService(
+      configService as ConfigService,
+    );
 
     await expect(
       service.execute('system prompt', 'user prompt'),
@@ -207,7 +267,25 @@ describe('OpenAiLlmClientService', () => {
       writable: true,
     });
 
-    const service = new OpenAiLlmClientService();
+    const configService = createConfigServiceMock();
+
+    configService.getOrThrow = jest
+      .fn()
+      .mockImplementation((key: string) => {
+        if (key === 'OPENAI_API_KEY') {
+          return 'test-api-key';
+        }
+
+        if (key === 'OPENAI_MODEL') {
+          return 'gpt-5.2';
+        }
+
+        throw new Error(`Unexpected config key: ${key}`);
+      });
+
+    const service = new OpenAiLlmClientService(
+      configService as ConfigService,
+    );
 
     await expect(
       service.execute('system prompt', 'user prompt'),
