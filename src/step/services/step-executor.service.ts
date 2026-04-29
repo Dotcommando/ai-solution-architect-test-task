@@ -93,10 +93,10 @@ export class StepExecutorService {
       step.outputSchema === null
       || !step.validation.validateOutputSchema
     ) {
-      return `${baseUserPrompt}\n\nPrevious error: ${error.message}\nReturn valid JSON only.`;
+      return `${baseUserPrompt}\n\nPrevious error: ${error.message}\nRegenerate the full JSON response from scratch.\nReturn valid JSON only.`;
     }
 
-    return `${baseUserPrompt}\n\nPrevious error: ${error.message}\nReturn valid JSON only and make sure it matches the configured output schema.`;
+    return `${baseUserPrompt}\n\nPrevious error: ${error.message}\nRegenerate the full JSON response from scratch.\nCorrect every schema violation listed in the previous error.\nUse exact property names and no additional fields.\nReturn valid JSON only and make sure it matches the configured output schema.`;
   }
 
   private normalizeError(error: unknown): Error {

@@ -2,10 +2,8 @@ services:
   sa-db:
     image: mongo:8.2
     restart: unless-stopped
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
-      MONGO_INITDB_DATABASE: ${MONGO_INITDB_DATABASE}
+    env_file:
+      - .env
     ports:
       - "${MONGO_PORT}:27017"
     volumes:
@@ -28,12 +26,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    environment:
-      NODE_ENV: ${NODE_ENV}
-      PORT: ${PORT}
-      MONGODB_URI: ${MONGODB_URI}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OPENAI_MODEL: ${OPENAI_MODEL}
+    env_file:
+      - .env
     depends_on:
       sa-db:
         condition: service_healthy
