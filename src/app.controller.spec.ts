@@ -2,31 +2,49 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { RunOrchestratorUseCase } from './orchestrator/use-cases/run-orchestrator.use-case';
-import { IParsingStepOutput } from './types';
+import { IRunResult } from './run/types';
 
 describe('AppController', () => {
   let appController: AppController;
   let runOrchestratorUseCase: Pick<RunOrchestratorUseCase, 'run'>;
 
-  const createParsingOutput = (): IParsingStepOutput => {
+  const createRunResult = (): IRunResult => {
     return {
-      businessContext: 'merchant dashboard',
-      components: [
-        {
-          code: 'payment_card',
-          name: 'Payment card',
-          parentCode: null,
-          purpose: 'Display a saved payment method.',
-          statePolicy: 'smart',
-          type: 'card',
-        },
-      ],
-      constraints: [],
-      content: [],
-      interactions: [],
-      rootComponentCode: 'payment_card',
-      specifiedStates: [],
-      tokenReferences: [],
+      component: {
+        business_context: 'merchant dashboard',
+        name: 'Payment card',
+        type: 'card',
+      },
+      extraction: {
+        constraints: [],
+        specified_states: ['selected'],
+        tokens_referenced: ['--color-text-primary'],
+      },
+      gap_analysis: {
+        accessibility_gaps: ['Keyboard navigation needs explicit coverage.'],
+        missing_states: ['error'],
+        recommendations: ['Define the error state.'],
+        responsive_gaps: ['Narrow layout action placement is undefined.'],
+      },
+      generated_code: {
+        files: [
+          {
+            content: 'export function PaymentCard() { return null; }',
+            filename:
+              '/workspace/generated/frontend/src/components/PaymentCard/PaymentCard.tsx',
+          },
+        ],
+        framework: 'React',
+        states_covered: ['selected'],
+        tokens_used: ['--color-text-primary'],
+      },
+      validation: {
+        accessibility_score: 'needs_attention',
+        hallucinations_caught: [],
+        issues_found: ['Missing required states: error'],
+        states_coverage: '1/2',
+        token_compliance: true,
+      },
     };
   };
 
@@ -56,20 +74,10 @@ describe('AppController', () => {
   });
 
   describe('createComponent', () => {
-    it('normalizes the request and returns the parsing result', async () => {
-      const parsingOutput = createParsingOutput();
+    it('normalizes the request and returns the exact expected output shape', async () => {
+      const runResult = createRunResult();
 
-      runOrchestratorUseCase.run = jest.fn().mockResolvedValue({
-        attempts: 1,
-        input: {
-          componentDescription: 'Payment card component.',
-          figmaUrl: null,
-          screenshotUrl: 'https://example.com/screenshot.png',
-        },
-        parsing: parsingOutput,
-        rawOutput: '{"businessContext":"merchant dashboard"}',
-        runId: 'run-id-1',
-      });
+      runOrchestratorUseCase.run = jest.fn().mockResolvedValue(runResult);
 
       await expect(
         appController.createComponent({
@@ -77,17 +85,7 @@ describe('AppController', () => {
           figmaUrl: ' ',
           screenshotUrl: 'https://example.com/screenshot.png',
         }),
-      ).resolves.toEqual({
-        attempts: 1,
-        input: {
-          componentDescription: 'Payment card component.',
-          figmaUrl: null,
-          screenshotUrl: 'https://example.com/screenshot.png',
-        },
-        parsing: parsingOutput,
-        rawOutput: '{"businessContext":"merchant dashboard"}',
-        runId: 'run-id-1',
-      });
+      ).resolves.toEqual(runResult);
 
       expect(runOrchestratorUseCase.run).toHaveBeenCalledWith({
         componentDescription: 'Payment card component.',

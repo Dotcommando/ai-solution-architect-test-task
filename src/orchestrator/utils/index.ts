@@ -20,6 +20,7 @@ import {
 import {
   IRunArtifacts,
   IRunDerivedData,
+  IRunResult,
   IRunStepReport,
   IRunStepTokenUsage,
   IRunTokenUsageTotals,
@@ -43,10 +44,7 @@ import {
   IValidationStepOutput,
 } from '../../validation/types';
 import { IStepTokenUsage } from '../../step/types';
-import type {
-  IRunOrchestratorRequest,
-  IRunOrchestratorResponse,
-} from '../types';
+import type { IRunOrchestratorRequest } from '../types';
 
 interface IBuildBaseStepReportParams {
   attempts: number;
@@ -61,7 +59,7 @@ interface IBuildBaseStepReportParams {
 }
 
 export function buildArtifactsFromParsing(
-  parsingOutput: IRunOrchestratorResponse['parsing'],
+  parsingOutput: IParsingStepOutput,
 ): IRunArtifacts {
   return {
     componentInterfaces: null,
@@ -198,7 +196,7 @@ export function buildArtifactsWithValidation(
 }
 
 export function buildDerivedDataFromParsing(
-  parsingOutput: IRunOrchestratorResponse['parsing'],
+  parsingOutput: IParsingStepOutput,
 ): IRunDerivedData {
   const rootComponent = findRootComponent(parsingOutput);
 
@@ -226,7 +224,7 @@ export function buildDerivedDataFromParsing(
 export function buildParsingStepReport(
   request: IRunOrchestratorRequest,
   attempts: number,
-  output: IRunOrchestratorResponse['parsing'],
+  output: IParsingStepOutput,
   rawOutput: string,
   tokenUsage: IRunStepTokenUsage,
 ): IRunStepReport {
@@ -416,7 +414,7 @@ export function buildValidationStepReport(
 
 export function buildComponentInterfacesStageInput(
   request: IRunOrchestratorRequest,
-  parsing: IRunOrchestratorResponse['parsing'],
+  parsing: IParsingStepOutput,
   gapAnalysis: IGapAnalysisStepOutput,
   resolvingGaps: IResolvingGapsStepOutput,
   targetComponent: IParsedComponent,
@@ -469,6 +467,54 @@ export function buildValidationFeedbackForComponent(
     : {
         reasons: matchingReason.reasons,
       };
+}
+
+export function buildRunResult(
+  artifacts: IRunArtifacts,
+  derivedData: IRunDerivedData,
+): IRunResult {
+  if (
+    artifacts.parsing === null ||
+    artifacts.gapAnalysis === null ||
+    artifacts.generatedCode === null ||
+    artifacts.validation === null ||
+    derivedData.rootComponentName === null ||
+    derivedData.rootComponentType === null
+  ) {
+    throw new Error('Run result cannot be built from incomplete artifacts');
+  }
+
+  return {
+    component: {
+      business_context: artifacts.parsing.businessContext,
+      name: derivedData.rootComponentName,
+      type: derivedData.rootComponentType,
+    },
+    extraction: {
+      constraints: derivedData.constraintDescriptions,
+      specified_states: derivedData.specifiedStateNames,
+      tokens_referenced: derivedData.referencedTokenNames,
+    },
+    gap_analysis: {
+      accessibility_gaps: artifacts.gapAnalysis.accessibilityGaps,
+      missing_states: artifacts.gapAnalysis.missingStates,
+      recommendations: artifacts.gapAnalysis.recommendations,
+      responsive_gaps: artifacts.gapAnalysis.responsiveGaps,
+    },
+    generated_code: {
+      files: artifacts.generatedCode.files,
+      framework: artifacts.generatedCode.framework,
+      states_covered: artifacts.generatedCode.statesCovered,
+      tokens_used: artifacts.generatedCode.tokensUsed,
+    },
+    validation: {
+      accessibility_score: artifacts.validation.accessibilityScore,
+      hallucinations_caught: artifacts.validation.hallucinationsCaught,
+      issues_found: artifacts.validation.issuesFound,
+      states_coverage: artifacts.validation.stateCoverage.label,
+      token_compliance: artifacts.validation.tokenCompliance,
+    },
+  };
 }
 
 export function orderComponentsForInterfaces(

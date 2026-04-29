@@ -24,6 +24,7 @@ import { RunRepository } from '../../run/repositories/run.repository';
 import {
   IRunArtifacts,
   IRunDerivedData,
+  IRunResult,
   IRunStepReport,
 } from '../../run/types';
 import {
@@ -36,7 +37,7 @@ import { RunUnitTestsStepUseCase } from '../../unit-tests/use-cases/run-unit-tes
 import { RunUserFlowsStepUseCase } from '../../user-flows/use-cases/run-user-flows-step.use-case';
 import { IRunValidationStepUseCaseRequest } from '../../validation/types';
 import { RunValidationStepUseCase } from '../../validation/use-cases/run-validation-step.use-case';
-import { COMPONENT_STATE_POLICY } from '../../types';
+import { COMPONENT_STATE_POLICY, IParsingStepOutput } from '../../types';
 import type {
   IRunOrchestratorRequest,
   IRunOrchestratorResponse,
@@ -70,6 +71,7 @@ import {
   buildResolvingGapsStepReport,
   buildRunCompletedUpdate,
   buildRunFailedUpdate,
+  buildRunResult,
   buildRunStepTokenUsage,
   buildRunStartedUpdate,
   buildTokenUsageTotals,
@@ -626,19 +628,22 @@ export class RunOrchestratorUseCase {
         }
       }
 
+      const result = buildRunResult(
+        artifactsWithValidation,
+        parsingDerivedData,
+      );
+
+      await this.saveRunProgress(
+        runId,
+        artifactsWithValidation,
+        parsingDerivedData,
+        stepsWithValidation,
+        result,
+      );
+
       await this.markRunAsCompleted(runId);
 
-      return {
-        attempts: parsingResult.attempts,
-        input: {
-          componentDescription: request.componentDescription,
-          figmaUrl: request.figmaUrl,
-          screenshotUrl: request.screenshotUrl,
-        },
-        parsing: parsingResult.output,
-        rawOutput: parsingResult.rawOutput,
-        runId,
-      };
+      return result;
     } catch (error) {
       await this.markRunAsFailed(runId, error);
       throw error;
@@ -671,7 +676,7 @@ export class RunOrchestratorUseCase {
 
   private async runGapAnalysisStage(
     request: IRunOrchestratorRequest,
-    parsing: IRunOrchestratorResponse['parsing'],
+    parsing: IParsingStepOutput,
   ): ReturnType<RunGapAnalysisStepUseCase['execute']> {
     return this.runGapAnalysisStepUseCase.execute({
       componentDescription: request.componentDescription,
@@ -681,7 +686,7 @@ export class RunOrchestratorUseCase {
 
   private async runResolvingGapsStage(
     request: IRunOrchestratorRequest,
-    parsing: IRunOrchestratorResponse['parsing'],
+    parsing: IParsingStepOutput,
     gapAnalysis: IGapAnalysisStepOutput,
   ): ReturnType<RunResolvingGapsStepUseCase['execute']> {
     return this.runResolvingGapsStepUseCase.execute({
@@ -693,7 +698,7 @@ export class RunOrchestratorUseCase {
 
   private async runUserFlowsStage(
     request: IRunOrchestratorRequest,
-    parsing: IRunOrchestratorResponse['parsing'],
+    parsing: IParsingStepOutput,
     gapAnalysis: IGapAnalysisStepOutput,
     resolvingGaps: IResolvingGapsStepOutput,
   ): ReturnType<RunUserFlowsStepUseCase['execute']> {
@@ -740,11 +745,13 @@ export class RunOrchestratorUseCase {
     artifacts: IRunArtifacts,
     derivedData: IRunDerivedData,
     steps: IRunStepReport[],
+    result?: IRunResult,
   ): Promise<void> {
     await this.runRepository.updateById({
       artifacts,
       derivedData,
       id: runId,
+      result,
       steps,
       tokenUsageTotals: buildTokenUsageTotals(steps),
     });

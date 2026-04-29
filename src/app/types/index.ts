@@ -1,4 +1,4 @@
-import { IParsingStepOutput } from '../../types';
+import { IRunResult } from '../../run/types';
 
 export interface ICreateComponentRequest {
   componentDescription: string;
@@ -12,10 +12,4 @@ export interface ICreateComponentResponseInput {
   screenshotUrl: string | null;
 }
 
-export interface ICreateComponentResponse {
-  attempts: number;
-  input: ICreateComponentResponseInput;
-  parsing: IParsingStepOutput;
-  rawOutput: string;
-  runId: string;
-}
+export type ICreateComponentResponse = IRunResult;

@@ -484,41 +484,58 @@ describe('RunOrchestratorUseCase', () => {
         screenshotUrl: null,
       }),
     ).resolves.toEqual({
-      attempts: 1,
-      input: {
-        componentDescription: 'Payment card component.',
-        figmaUrl: null,
-        screenshotUrl: null,
+      component: {
+        business_context: 'merchant dashboard',
+        name: 'Payment card',
+        type: 'card',
       },
-      parsing: {
-        businessContext: 'merchant dashboard',
-        components: [
+      extraction: {
+        constraints: [],
+        specified_states: [],
+        tokens_referenced: [],
+      },
+      gap_analysis: {
+        accessibility_gaps: ['Card selection must be keyboard reachable.'],
+        missing_states: ['Selected state is not explicitly defined.'],
+        recommendations: ['Define selected and delete-confirmation states.'],
+        responsive_gaps: ['Action placement on narrow widths is not defined.'],
+      },
+      generated_code: {
+        files: [
           {
-            code: 'payment_card',
-            name: 'Payment card',
-            parentCode: null,
-            purpose: 'Display a saved card.',
-            statePolicy: 'smart',
-            type: 'card',
+            content: 'export function CardBrandIcon() { return null; }',
+            filename: join(
+              process.cwd(),
+              'generated/frontend',
+              'src',
+              'components',
+              'CardBrandIcon',
+              'CardBrandIcon.tsx',
+            ),
           },
           {
-            code: 'card_brand_icon',
-            name: 'Card brand icon',
-            parentCode: 'payment_card',
-            purpose: 'Show the card brand.',
-            statePolicy: 'dumb',
-            type: 'icon',
+            content: 'export function PaymentCard() { return null; }',
+            filename: join(
+              process.cwd(),
+              'generated/frontend',
+              'src',
+              'components',
+              'PaymentCard',
+              'PaymentCard.tsx',
+            ),
           },
         ],
-        constraints: [],
-        content: [],
-        interactions: [],
-        rootComponentCode: 'payment_card',
-        specifiedStates: [],
-        tokenReferences: [],
+        framework: 'React',
+        states_covered: ['selected'],
+        tokens_used: ['icon spacing', 'card spacing', 'status color'],
       },
-      rawOutput: '{"businessContext":"merchant dashboard"}',
-      runId: 'run-id-1',
+      validation: {
+        accessibility_score: 'needs_attention',
+        hallucinations_caught: [],
+        issues_found: ['Missing required states: error'],
+        states_coverage: '1/2',
+        token_compliance: true,
+      },
     });
 
     expect(runGapAnalysisStepUseCase.execute).toHaveBeenCalledWith({
@@ -1087,7 +1104,7 @@ describe('RunOrchestratorUseCase', () => {
         screenshotUrl: null,
       },
     });
-    expect(runRepository.updateById).toHaveBeenCalledTimes(14);
+    expect(runRepository.updateById).toHaveBeenCalledTimes(15);
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
@@ -1582,6 +1599,70 @@ describe('RunOrchestratorUseCase', () => {
       14,
       expect.objectContaining({
         id: 'run-id-1',
+        result: {
+          component: {
+            business_context: 'merchant dashboard',
+            name: 'Payment card',
+            type: 'card',
+          },
+          extraction: {
+            constraints: [],
+            specified_states: [],
+            tokens_referenced: [],
+          },
+          gap_analysis: {
+            accessibility_gaps: ['Card selection must be keyboard reachable.'],
+            missing_states: ['Selected state is not explicitly defined.'],
+            recommendations: [
+              'Define selected and delete-confirmation states.',
+            ],
+            responsive_gaps: [
+              'Action placement on narrow widths is not defined.',
+            ],
+          },
+          generated_code: {
+            files: [
+              {
+                content: 'export function CardBrandIcon() { return null; }',
+                filename: join(
+                  process.cwd(),
+                  'generated/frontend',
+                  'src',
+                  'components',
+                  'CardBrandIcon',
+                  'CardBrandIcon.tsx',
+                ),
+              },
+              {
+                content: 'export function PaymentCard() { return null; }',
+                filename: join(
+                  process.cwd(),
+                  'generated/frontend',
+                  'src',
+                  'components',
+                  'PaymentCard',
+                  'PaymentCard.tsx',
+                ),
+              },
+            ],
+            framework: 'React',
+            states_covered: ['selected'],
+            tokens_used: ['icon spacing', 'card spacing', 'status color'],
+          },
+          validation: {
+            accessibility_score: 'needs_attention',
+            hallucinations_caught: [],
+            issues_found: ['Missing required states: error'],
+            states_coverage: '1/2',
+            token_compliance: true,
+          },
+        },
+      }),
+    );
+    expect(runRepository.updateById).toHaveBeenNthCalledWith(
+      15,
+      expect.objectContaining({
+        id: 'run-id-1',
         status: RUN_STATUS.COMPLETED,
       }),
     );
@@ -1983,11 +2064,61 @@ describe('RunOrchestratorUseCase', () => {
         figmaUrl: null,
         screenshotUrl: null,
       }),
-    ).resolves.toEqual(
-      expect.objectContaining({
-        runId: 'run-id-2',
-      }),
-    );
+    ).resolves.toEqual({
+      component: {
+        business_context: 'merchant dashboard',
+        name: 'Payment card',
+        type: 'card',
+      },
+      extraction: {
+        constraints: [],
+        specified_states: [],
+        tokens_referenced: [],
+      },
+      gap_analysis: {
+        accessibility_gaps: ['Card selection must be keyboard reachable.'],
+        missing_states: ['Selected state is not explicitly defined.'],
+        recommendations: ['Define selected and delete-confirmation states.'],
+        responsive_gaps: ['Action placement on narrow widths is not defined.'],
+      },
+      generated_code: {
+        files: [
+          {
+            content: 'export function CardBrandIcon() { return null; }',
+            filename: join(
+              process.cwd(),
+              'generated/frontend',
+              'src',
+              'components',
+              'CardBrandIcon',
+              'CardBrandIcon.tsx',
+            ),
+          },
+          {
+            content:
+              'export function PaymentCard() { return <div style={{ color: "var(--color-text-primary)" }} />; }',
+            filename: join(
+              process.cwd(),
+              'generated/frontend',
+              'src',
+              'components',
+              'PaymentCard',
+              'PaymentCard.tsx',
+            ),
+          },
+        ],
+        framework: 'React',
+        states_covered: ['selected', 'error'],
+        tokens_used: ['--icon-color-default', '--color-text-primary'],
+      },
+      validation: {
+        accessibility_score: 'basic_pass',
+        hallucinations_caught: [],
+        issues_found: [],
+        states_coverage: '2/2',
+        token_compliance: true,
+      },
+    });
 
     expect(runComponentGenerationStepUseCase.execute).toHaveBeenCalledTimes(3);
     expect(runComponentGenerationStepUseCase.execute).toHaveBeenNthCalledWith(

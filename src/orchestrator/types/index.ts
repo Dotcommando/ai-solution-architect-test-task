@@ -1,5 +1,4 @@
-import { ICreateComponentResponseInput } from '../../app/types';
-import { IParsingStepOutput } from '../../types';
+import { IRunResult } from '../../run/types';
 
 export interface IRunOrchestratorRequest {
   componentDescription: string;
@@ -7,10 +6,4 @@ export interface IRunOrchestratorRequest {
   screenshotUrl: string | null;
 }
 
-export interface IRunOrchestratorResponse {
-  attempts: number;
-  input: ICreateComponentResponseInput;
-  parsing: IParsingStepOutput;
-  rawOutput: string;
-  runId: string;
-}
+export type IRunOrchestratorResponse = IRunResult;

@@ -336,19 +336,19 @@ describe('RunValidationStepUseCase', () => {
         hallucinationsCaught: [],
         isRegenerationRequired: true,
         issuesFound: [
-          'Missing required states: error, invalid',
+          'Missing required states: error',
           'Keyboard focus styling needs explicit coverage.',
         ],
         regenerationReasons: [
           {
             componentCode: 'payment_card',
-            reasons: ['Missing required states: error, invalid'],
+            reasons: ['Missing required states: error'],
           },
         ],
         stateCoverage: {
           coveredCount: 1,
-          label: '1/3',
-          totalCount: 3,
+          label: '1/2',
+          totalCount: 2,
         },
         tokenCompliance: true,
       },
@@ -379,12 +379,12 @@ describe('RunValidationStepUseCase', () => {
           coveredStates: ['selected'],
           detectedHallucinations: [],
           knownTokenCompliance: true,
-          missingStates: ['error', 'invalid'],
-          requiredStates: ['error', 'invalid', 'selected'],
+          missingStates: ['error'],
+          requiredStates: ['error', 'selected'],
           stateCoverage: {
             coveredCount: 1,
-            label: '1/3',
-            totalCount: 3,
+            label: '1/2',
+            totalCount: 2,
           },
         },
       }),
@@ -470,21 +470,21 @@ describe('RunValidationStepUseCase', () => {
         isRegenerationRequired: true,
         issuesFound: [
           'Unknown design-system tokens or CSS variables found: --imagined-border',
-          'Missing required states: error, invalid',
+          'Missing required states: error',
         ],
         regenerationReasons: [
           {
             componentCode: 'payment_card',
             reasons: [
               'Unknown design-system tokens or CSS variables found: --imagined-border',
-              'Missing required states: error, invalid',
+              'Missing required states: error',
             ],
           },
         ],
         stateCoverage: {
           coveredCount: 1,
-          label: '1/3',
-          totalCount: 3,
+          label: '1/2',
+          totalCount: 2,
         },
         tokenCompliance: false,
       },
@@ -501,15 +501,215 @@ describe('RunValidationStepUseCase', () => {
           coveredStates: ['selected'],
           detectedHallucinations: ['--imagined-border'],
           knownTokenCompliance: false,
-          missingStates: ['error', 'invalid'],
-          requiredStates: ['error', 'invalid', 'selected'],
+          missingStates: ['error'],
+          requiredStates: ['error', 'selected'],
           stateCoverage: {
             coveredCount: 1,
-            label: '1/3',
-            totalCount: 3,
+            label: '1/2',
+            totalCount: 2,
           },
         },
       }),
     );
+  });
+
+  it('does not request regeneration when hard state blockers are already covered and only soft issues remain', async () => {
+    const promptRepository = createPromptRepositoryMock();
+    const stepRepository = createStepRepositoryMock();
+    const stepExecutorService = createStepExecutorServiceMock();
+    const step = createStep();
+    const prompt = createPrompt();
+    const executionResult = createExecutionResult();
+
+    stepRepository.findActiveByCode = jest.fn().mockResolvedValue(step);
+    promptRepository.findActiveByCodeAndVariant = jest
+      .fn()
+      .mockResolvedValue(prompt);
+    stepExecutorService.execute = jest
+      .fn<
+        Promise<IStepExecutionResult<IValidationStepOutput>>,
+        [IValidationStepExecutorRequest]
+      >()
+      .mockResolvedValue({
+        ...executionResult,
+        output: {
+          ...executionResult.output,
+          issuesFound: [
+            'Delete action buttons could use more specific accessible labels.',
+          ],
+        },
+      });
+
+    const useCase = new RunValidationStepUseCase(
+      stepRepository as StepRepository,
+      promptRepository as PromptRepository,
+      stepExecutorService as StepExecutorService,
+    );
+
+    await expect(
+      useCase.execute({
+        componentDescription: 'Payment card component.',
+        componentInterfaces: createComponentInterfaces(),
+        designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
+        e2eTests: null,
+        generatedCode: {
+          ...createGeneratedCode(),
+          components: [
+            {
+              ...createGeneratedCode().components[0],
+              statesCovered: [
+                'selected=true',
+                'delete_error present',
+                'invalid destructive action blocked',
+              ],
+            },
+          ],
+          statesCovered: [
+            'selected=true',
+            'delete_error present',
+            'invalid destructive action blocked',
+          ],
+        },
+        gapAnalysis: createGapAnalysisOutput(),
+        parsing: createParsingOutput(),
+        resolvingGaps: createResolvingGapsOutput(),
+        unitTests: {
+          components: [],
+        },
+        userFlows: createUserFlowsOutput(),
+      }),
+    ).resolves.toEqual({
+      attempts: 1,
+      output: {
+        accessibilityScore: 'needs_attention',
+        affectedComponentCodes: [],
+        contractCompatibilityIssues: [],
+        hallucinationsCaught: [],
+        isRegenerationRequired: false,
+        issuesFound: [
+          'Delete action buttons could use more specific accessible labels.',
+        ],
+        regenerationReasons: [],
+        stateCoverage: {
+          coveredCount: 2,
+          label: '2/2',
+          totalCount: 2,
+        },
+        tokenCompliance: true,
+      },
+      rawOutput: '{"tokenCompliance":true}',
+      tokenUsage: executionResult.tokenUsage,
+    });
+
+    const executeCall = stepExecutorService.execute.mock.calls[0]?.[0];
+
+    expect(executeCall).toBeDefined();
+    expect(executeCall.input.deterministicSummary.coveredStates).toEqual(
+      expect.arrayContaining(['selected', 'error', 'invalid']),
+    );
+    expect(
+      executeCall.input.deterministicSummary.detectedHallucinations,
+    ).toEqual([]);
+    expect(executeCall.input.deterministicSummary.knownTokenCompliance).toBe(
+      true,
+    );
+    expect(executeCall.input.deterministicSummary.missingStates).toEqual([]);
+    expect(executeCall.input.deterministicSummary.requiredStates).toEqual([
+      'error',
+      'selected',
+    ]);
+    expect(executeCall.input.deterministicSummary.stateCoverage).toEqual({
+      coveredCount: 2,
+      label: '2/2',
+      totalCount: 2,
+    });
+  });
+
+  it('keeps hover gaps as advisory findings without triggering regeneration', async () => {
+    const promptRepository = createPromptRepositoryMock();
+    const stepRepository = createStepRepositoryMock();
+    const stepExecutorService = createStepExecutorServiceMock();
+    const step = createStep();
+    const prompt = createPrompt();
+    const executionResult = createExecutionResult();
+
+    stepRepository.findActiveByCode = jest.fn().mockResolvedValue(step);
+    promptRepository.findActiveByCodeAndVariant = jest
+      .fn()
+      .mockResolvedValue(prompt);
+    stepExecutorService.execute = jest
+      .fn<
+        Promise<IStepExecutionResult<IValidationStepOutput>>,
+        [IValidationStepExecutorRequest]
+      >()
+      .mockResolvedValue({
+        ...executionResult,
+        output: {
+          ...executionResult.output,
+          issuesFound: ['Hover styling should be visually clearer.'],
+        },
+      });
+
+    const useCase = new RunValidationStepUseCase(
+      stepRepository as StepRepository,
+      promptRepository as PromptRepository,
+      stepExecutorService as StepExecutorService,
+    );
+
+    await expect(
+      useCase.execute({
+        componentDescription: 'Payment card component.',
+        componentInterfaces: createComponentInterfaces(),
+        designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
+        e2eTests: null,
+        generatedCode: {
+          ...createGeneratedCode(),
+          components: [
+            {
+              ...createGeneratedCode().components[0],
+              statesCovered: ['selected'],
+            },
+          ],
+          statesCovered: ['selected'],
+        },
+        gapAnalysis: {
+          ...createGapAnalysisOutput(),
+          missingStates: ['Hover state is not explicitly defined.'],
+        },
+        parsing: {
+          ...createParsingOutput(),
+          specifiedStates: [],
+        },
+        resolvingGaps: {
+          decisions: [],
+        },
+        unitTests: {
+          components: [],
+        },
+        userFlows: createUserFlowsOutput(),
+      }),
+    ).resolves.toEqual({
+      attempts: 1,
+      output: {
+        accessibilityScore: 'needs_attention',
+        affectedComponentCodes: [],
+        contractCompatibilityIssues: [],
+        hallucinationsCaught: [],
+        isRegenerationRequired: false,
+        issuesFound: [
+          'Additional interactive states are not explicitly covered: hover',
+          'Hover styling should be visually clearer.',
+        ],
+        regenerationReasons: [],
+        stateCoverage: {
+          coveredCount: 0,
+          label: '0/1',
+          totalCount: 1,
+        },
+        tokenCompliance: true,
+      },
+      rawOutput: '{"tokenCompliance":true}',
+      tokenUsage: executionResult.tokenUsage,
+    });
   });
 });
