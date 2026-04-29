@@ -35,19 +35,15 @@ describe('OpenAiLlmClientService', () => {
   it('throws when OPENAI_API_KEY is missing', async () => {
     const configService = createConfigServiceMock();
 
-    configService.getOrThrow = jest
-      .fn()
-      .mockImplementation((key: string) => {
-        if (key === 'OPENAI_API_KEY') {
-          return ' ';
-        }
+    configService.getOrThrow = jest.fn().mockImplementation((key: string) => {
+      if (key === 'OPENAI_API_KEY') {
+        return ' ';
+      }
 
-        return 'gpt-5.2';
-      });
+      return 'gpt-5.2';
+    });
 
-    const service = new OpenAiLlmClientService(
-      configService as ConfigService,
-    );
+    const service = new OpenAiLlmClientService(configService as ConfigService);
 
     await expect(
       service.execute('system prompt', 'user prompt'),
@@ -57,26 +53,22 @@ describe('OpenAiLlmClientService', () => {
   it('throws when OPENAI_MODEL is missing', async () => {
     const configService = createConfigServiceMock();
 
-    configService.getOrThrow = jest
-      .fn()
-      .mockImplementation((key: string) => {
-        if (key === 'OPENAI_MODEL') {
-          return ' ';
-        }
+    configService.getOrThrow = jest.fn().mockImplementation((key: string) => {
+      if (key === 'OPENAI_MODEL') {
+        return ' ';
+      }
 
-        return 'test-api-key';
-      });
+      return 'test-api-key';
+    });
 
-    const service = new OpenAiLlmClientService(
-      configService as ConfigService,
-    );
+    const service = new OpenAiLlmClientService(configService as ConfigService);
 
     await expect(
       service.execute('system prompt', 'user prompt'),
     ).rejects.toThrow('OPENAI_MODEL is not configured');
   });
 
-  it('calls the OpenAI Responses API and returns the first output_text text', async () => {
+  it('calls the OpenAI Responses API and returns the first output_text text with token usage', async () => {
     const fetchMock = jest.fn<
       Promise<IFetchResponseMock>,
       [string, RequestInit]
@@ -84,8 +76,8 @@ describe('OpenAiLlmClientService', () => {
 
     fetchMock.mockResolvedValueOnce(
       createFetchResponseMock({
-        json: async () => {
-          return {
+        json: () =>
+          Promise.resolve({
             output: [
               {
                 content: [
@@ -99,13 +91,21 @@ describe('OpenAiLlmClientService', () => {
                 type: 'message',
               },
             ],
-          };
-        },
+            usage: {
+              input_tokens: 120,
+              input_tokens_details: {
+                cached_tokens: 12,
+              },
+              output_tokens: 45,
+              output_tokens_details: {
+                reasoning_tokens: 7,
+              },
+              total_tokens: 165,
+            },
+          }),
         ok: true,
         status: 200,
-        text: async () => {
-          return '';
-        },
+        text: () => Promise.resolve(''),
       }),
     );
 
@@ -116,27 +116,32 @@ describe('OpenAiLlmClientService', () => {
 
     const configService = createConfigServiceMock();
 
-    configService.getOrThrow = jest
-      .fn()
-      .mockImplementation((key: string) => {
-        if (key === 'OPENAI_API_KEY') {
-          return 'test-api-key';
-        }
+    configService.getOrThrow = jest.fn().mockImplementation((key: string) => {
+      if (key === 'OPENAI_API_KEY') {
+        return 'test-api-key';
+      }
 
-        if (key === 'OPENAI_MODEL') {
-          return 'gpt-5.2';
-        }
+      if (key === 'OPENAI_MODEL') {
+        return 'gpt-5.2';
+      }
 
-        throw new Error(`Unexpected config key: ${key}`);
-      });
+      throw new Error(`Unexpected config key: ${key}`);
+    });
 
-    const service = new OpenAiLlmClientService(
-      configService as ConfigService,
-    );
+    const service = new OpenAiLlmClientService(configService as ConfigService);
 
     await expect(
       service.execute('system prompt', 'user prompt'),
-    ).resolves.toBe('{"status":"ok"}');
+    ).resolves.toEqual({
+      rawOutput: '{"status":"ok"}',
+      tokenUsage: {
+        cachedInputTokens: 12,
+        inputTokens: 120,
+        outputTokens: 45,
+        reasoningTokens: 7,
+        totalTokens: 165,
+      },
+    });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
@@ -184,18 +189,17 @@ describe('OpenAiLlmClientService', () => {
 
     fetchMock.mockResolvedValueOnce(
       createFetchResponseMock({
-        json: async () => {
-          return {};
-        },
+        json: () => Promise.resolve({}),
         ok: false,
         status: 401,
-        text: async () => {
-          return JSON.stringify({
-            error: {
-              message: 'Invalid API key',
-            },
-          });
-        },
+        text: () =>
+          Promise.resolve(
+            JSON.stringify({
+              error: {
+                message: 'Invalid API key',
+              },
+            }),
+          ),
       }),
     );
 
@@ -206,23 +210,19 @@ describe('OpenAiLlmClientService', () => {
 
     const configService = createConfigServiceMock();
 
-    configService.getOrThrow = jest
-      .fn()
-      .mockImplementation((key: string) => {
-        if (key === 'OPENAI_API_KEY') {
-          return 'test-api-key';
-        }
+    configService.getOrThrow = jest.fn().mockImplementation((key: string) => {
+      if (key === 'OPENAI_API_KEY') {
+        return 'test-api-key';
+      }
 
-        if (key === 'OPENAI_MODEL') {
-          return 'gpt-5.2';
-        }
+      if (key === 'OPENAI_MODEL') {
+        return 'gpt-5.2';
+      }
 
-        throw new Error(`Unexpected config key: ${key}`);
-      });
+      throw new Error(`Unexpected config key: ${key}`);
+    });
 
-    const service = new OpenAiLlmClientService(
-      configService as ConfigService,
-    );
+    const service = new OpenAiLlmClientService(configService as ConfigService);
 
     await expect(
       service.execute('system prompt', 'user prompt'),
@@ -237,8 +237,8 @@ describe('OpenAiLlmClientService', () => {
 
     fetchMock.mockResolvedValueOnce(
       createFetchResponseMock({
-        json: async () => {
-          return {
+        json: () =>
+          Promise.resolve({
             output: [
               {
                 content: [
@@ -252,13 +252,10 @@ describe('OpenAiLlmClientService', () => {
                 type: 'message',
               },
             ],
-          };
-        },
+          }),
         ok: true,
         status: 200,
-        text: async () => {
-          return '';
-        },
+        text: () => Promise.resolve(''),
       }),
     );
 
@@ -269,23 +266,19 @@ describe('OpenAiLlmClientService', () => {
 
     const configService = createConfigServiceMock();
 
-    configService.getOrThrow = jest
-      .fn()
-      .mockImplementation((key: string) => {
-        if (key === 'OPENAI_API_KEY') {
-          return 'test-api-key';
-        }
+    configService.getOrThrow = jest.fn().mockImplementation((key: string) => {
+      if (key === 'OPENAI_API_KEY') {
+        return 'test-api-key';
+      }
 
-        if (key === 'OPENAI_MODEL') {
-          return 'gpt-5.2';
-        }
+      if (key === 'OPENAI_MODEL') {
+        return 'gpt-5.2';
+      }
 
-        throw new Error(`Unexpected config key: ${key}`);
-      });
+      throw new Error(`Unexpected config key: ${key}`);
+    });
 
-    const service = new OpenAiLlmClientService(
-      configService as ConfigService,
-    );
+    const service = new OpenAiLlmClientService(configService as ConfigService);
 
     await expect(
       service.execute('system prompt', 'user prompt'),

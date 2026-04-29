@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { IStepExecutorLlmClient } from '../types';
+import type {
+  IStepExecutorLlmClient,
+  IStepExecutorLlmResponse,
+  IStepTokenUsage,
+} from '../types';
 
 interface IOpenAiResponseOutputContent {
   text?: string;
@@ -14,17 +18,30 @@ interface IOpenAiResponseOutputItem {
 
 interface IOpenAiResponsePayload {
   output?: IOpenAiResponseOutputItem[];
+  usage?: {
+    input_tokens?: number;
+    input_tokens_details?: {
+      cached_tokens?: number;
+    };
+    output_tokens?: number;
+    output_tokens_details?: {
+      reasoning_tokens?: number;
+    };
+    total_tokens?: number;
+  };
 }
 
 @Injectable()
 export class OpenAiLlmClientService implements IStepExecutorLlmClient {
-  private static readonly RESPONSES_API_URL = 'https://api.openai.com/v1/responses';
+  private static readonly RESPONSES_API_URL =
+    'https://api.openai.com/v1/responses';
 
-  constructor(
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly configService: ConfigService) {}
 
-  async execute(systemPrompt: string, userPrompt: string): Promise<string> {
+  async execute(
+    systemPrompt: string,
+    userPrompt: string,
+  ): Promise<IStepExecutorLlmResponse> {
     const apiKey = this.getRequiredEnvValue('OPENAI_API_KEY');
     const model = this.getRequiredEnvValue('OPENAI_MODEL');
     const response = await fetch(OpenAiLlmClientService.RESPONSES_API_URL, {
@@ -68,14 +85,17 @@ export class OpenAiLlmClientService implements IStepExecutorLlmClient {
       );
     }
 
-    const payload = await response.json();
+    const payload: unknown = await response.json();
     const outputText = this.extractOutputText(payload);
 
     if (outputText === null) {
       throw new Error('OpenAI response does not contain output_text content');
     }
 
-    return outputText;
+    return {
+      rawOutput: outputText,
+      tokenUsage: this.extractTokenUsage(payload),
+    };
   }
 
   private async extractErrorMessage(response: Response): Promise<string> {
@@ -128,8 +148,8 @@ export class OpenAiLlmClientService implements IStepExecutorLlmClient {
 
       for (const contentItem of outputItem.content) {
         if (
-          contentItem.type === 'output_text'
-          && typeof contentItem.text === 'string'
+          contentItem.type === 'output_text' &&
+          typeof contentItem.text === 'string'
         ) {
           return contentItem.text;
         }
@@ -137,6 +157,26 @@ export class OpenAiLlmClientService implements IStepExecutorLlmClient {
     }
 
     return null;
+  }
+
+  private extractTokenUsage(payload: unknown): IStepTokenUsage {
+    if (!this.isOpenAiResponsePayload(payload)) {
+      return this.buildEmptyTokenUsage();
+    }
+
+    const usage = payload.usage;
+
+    if (usage === undefined) {
+      return this.buildEmptyTokenUsage();
+    }
+
+    return {
+      cachedInputTokens: usage.input_tokens_details?.cached_tokens ?? 0,
+      inputTokens: usage.input_tokens ?? null,
+      outputTokens: usage.output_tokens ?? null,
+      reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
+      totalTokens: usage.total_tokens ?? null,
+    };
   }
 
   private getRequiredEnvValue(name: string): string {
@@ -159,9 +199,17 @@ export class OpenAiLlmClientService implements IStepExecutorLlmClient {
     return Array.isArray(value.output);
   }
 
-  private isRecord(
-    value: unknown,
-  ): value is Record<string, unknown> {
+  private isRecord(value: unknown): value is Record<string, unknown> {
     return value !== null && typeof value === 'object';
+  }
+
+  private buildEmptyTokenUsage(): IStepTokenUsage {
+    return {
+      cachedInputTokens: null,
+      inputTokens: null,
+      outputTokens: null,
+      reasoningTokens: null,
+      totalTokens: null,
+    };
   }
 }

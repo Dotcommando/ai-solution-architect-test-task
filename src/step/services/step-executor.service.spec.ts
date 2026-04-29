@@ -1,10 +1,10 @@
 import { IPrompt } from '../../prompt/types';
 import { PARSING_STEP_INPUT_SCHEMA } from '../../types';
-import { IStep } from '../types';
+import { IStep, IStepExecutorLlmResponse } from '../types';
 import { StepExecutorService } from './step-executor.service';
 
 interface ITestLlmClient {
-  execute: jest.Mock<Promise<string>, [string, string]>;
+  execute: jest.Mock<Promise<IStepExecutorLlmResponse>, [string, string]>;
 }
 
 describe('StepExecutorService', () => {
@@ -65,7 +65,23 @@ describe('StepExecutorService', () => {
 
   const createLlmClient = (): ITestLlmClient => {
     return {
-      execute: jest.fn<Promise<string>, [string, string]>(),
+      execute: jest.fn<Promise<IStepExecutorLlmResponse>, [string, string]>(),
+    };
+  };
+
+  const createLlmResponse = (
+    rawOutput: string,
+    tokenUsage = {
+      cachedInputTokens: 0,
+      inputTokens: 10,
+      outputTokens: 4,
+      reasoningTokens: 1,
+      totalTokens: 14,
+    },
+  ): IStepExecutorLlmResponse => {
+    return {
+      rawOutput,
+      tokenUsage,
     };
   };
 
@@ -89,9 +105,11 @@ describe('StepExecutorService', () => {
     const service = new StepExecutorService(llmClient);
 
     llmClient.execute.mockResolvedValueOnce(
-      JSON.stringify({
-        status: 'ok',
-      }),
+      createLlmResponse(
+        JSON.stringify({
+          status: 'ok',
+        }),
+      ),
     );
 
     await expect(
@@ -108,6 +126,13 @@ describe('StepExecutorService', () => {
         status: 'ok',
       },
       rawOutput: '{"status":"ok"}',
+      tokenUsage: {
+        cachedInputTokens: 0,
+        inputTokens: 10,
+        outputTokens: 4,
+        reasoningTokens: 1,
+        totalTokens: 14,
+      },
     });
 
     expect(llmClient.execute).toHaveBeenCalledWith(
@@ -116,16 +141,33 @@ describe('StepExecutorService', () => {
     );
   });
 
-  it('retries when the first LLM response is not valid JSON and succeeds on the next attempt', async () => {
+  it('accumulates token usage across retries when the first LLM response is not valid JSON and succeeds on the next attempt', async () => {
     const llmClient = createLlmClient();
     const service = new StepExecutorService(llmClient);
 
     llmClient.execute
-      .mockResolvedValueOnce('not-json')
       .mockResolvedValueOnce(
-        JSON.stringify({
-          status: 'ok',
+        createLlmResponse('not-json', {
+          cachedInputTokens: 0,
+          inputTokens: 8,
+          outputTokens: 2,
+          reasoningTokens: 0,
+          totalTokens: 10,
         }),
+      )
+      .mockResolvedValueOnce(
+        createLlmResponse(
+          JSON.stringify({
+            status: 'ok',
+          }),
+          {
+            cachedInputTokens: 1,
+            inputTokens: 9,
+            outputTokens: 3,
+            reasoningTokens: 1,
+            totalTokens: 13,
+          },
+        ),
       );
 
     await expect(
@@ -142,25 +184,50 @@ describe('StepExecutorService', () => {
         status: 'ok',
       },
       rawOutput: '{"status":"ok"}',
+      tokenUsage: {
+        cachedInputTokens: 1,
+        inputTokens: 17,
+        outputTokens: 5,
+        reasoningTokens: 1,
+        totalTokens: 23,
+      },
     });
 
     expect(llmClient.execute).toHaveBeenCalledTimes(2);
   });
 
-  it('retries when the parsed JSON does not match the output schema and succeeds on the next attempt', async () => {
+  it('accumulates token usage across retries when the parsed JSON does not match the output schema and succeeds on the next attempt', async () => {
     const llmClient = createLlmClient();
     const service = new StepExecutorService(llmClient);
 
     llmClient.execute
       .mockResolvedValueOnce(
-        JSON.stringify({
-          invalid: true,
-        }),
+        createLlmResponse(
+          JSON.stringify({
+            invalid: true,
+          }),
+          {
+            cachedInputTokens: 0,
+            inputTokens: 7,
+            outputTokens: 2,
+            reasoningTokens: 0,
+            totalTokens: 9,
+          },
+        ),
       )
       .mockResolvedValueOnce(
-        JSON.stringify({
-          status: 'ok',
-        }),
+        createLlmResponse(
+          JSON.stringify({
+            status: 'ok',
+          }),
+          {
+            cachedInputTokens: 0,
+            inputTokens: 11,
+            outputTokens: 4,
+            reasoningTokens: 2,
+            totalTokens: 15,
+          },
+        ),
       );
 
     await expect(
@@ -177,6 +244,13 @@ describe('StepExecutorService', () => {
         status: 'ok',
       },
       rawOutput: '{"status":"ok"}',
+      tokenUsage: {
+        cachedInputTokens: 0,
+        inputTokens: 18,
+        outputTokens: 6,
+        reasoningTokens: 2,
+        totalTokens: 24,
+      },
     });
 
     expect(llmClient.execute).toHaveBeenCalledTimes(2);
@@ -187,9 +261,9 @@ describe('StepExecutorService', () => {
     const service = new StepExecutorService(llmClient);
 
     llmClient.execute
-      .mockResolvedValueOnce('not-json')
-      .mockResolvedValueOnce('still-not-json')
-      .mockResolvedValueOnce('again-not-json');
+      .mockResolvedValueOnce(createLlmResponse('not-json'))
+      .mockResolvedValueOnce(createLlmResponse('still-not-json'))
+      .mockResolvedValueOnce(createLlmResponse('again-not-json'));
 
     await expect(
       service.execute({
@@ -213,9 +287,11 @@ describe('StepExecutorService', () => {
     step.inputSchema = PARSING_STEP_INPUT_SCHEMA;
 
     llmClient.execute.mockResolvedValueOnce(
-      JSON.stringify({
-        status: 'ok',
-      }),
+      createLlmResponse(
+        JSON.stringify({
+          status: 'ok',
+        }),
+      ),
     );
 
     await expect(
@@ -234,6 +310,13 @@ describe('StepExecutorService', () => {
         status: 'ok',
       },
       rawOutput: '{"status":"ok"}',
+      tokenUsage: {
+        cachedInputTokens: 0,
+        inputTokens: 10,
+        outputTokens: 4,
+        reasoningTokens: 1,
+        totalTokens: 14,
+      },
     });
   });
 });

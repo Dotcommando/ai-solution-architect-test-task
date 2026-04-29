@@ -68,6 +68,13 @@ describe('RunParsingStepUseCase', () => {
       attempts: 1,
       output: createOutput(),
       rawOutput: '{"businessContext":"merchant dashboard"}',
+      tokenUsage: {
+        cachedInputTokens: 0,
+        inputTokens: 12,
+        outputTokens: 4,
+        reasoningTokens: 1,
+        totalTokens: 16,
+      },
     };
   };
 

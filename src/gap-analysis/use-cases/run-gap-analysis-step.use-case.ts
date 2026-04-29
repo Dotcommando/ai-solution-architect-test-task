@@ -25,14 +25,15 @@ export class RunGapAnalysisStepUseCase {
   async execute(
     request: IRunGapAnalysisStepUseCaseRequest,
   ): Promise<IRunGapAnalysisStepUseCaseResponse> {
-    const step = await this.stepRepository.findActiveByCode(
-      GAP_ANALYSIS_STEP_CODE,
-    ) ?? DEFAULT_GAP_ANALYSIS_STEP;
+    const step =
+      (await this.stepRepository.findActiveByCode(GAP_ANALYSIS_STEP_CODE)) ??
+      DEFAULT_GAP_ANALYSIS_STEP;
 
-    const prompt = await this.promptRepository.findActiveByCodeAndVariant(
-      step.promptCode,
-      step.promptVariant,
-    ) ?? DEFAULT_GAP_ANALYSIS_PROMPT;
+    const prompt =
+      (await this.promptRepository.findActiveByCodeAndVariant(
+        step.promptCode,
+        step.promptVariant,
+      )) ?? DEFAULT_GAP_ANALYSIS_PROMPT;
 
     const input = this.buildStepInput(request);
     const result = await this.stepExecutorService.execute<
@@ -48,6 +49,7 @@ export class RunGapAnalysisStepUseCase {
       attempts: result.attempts,
       output: result.output,
       rawOutput: result.rawOutput,
+      tokenUsage: result.tokenUsage,
     };
   }
 

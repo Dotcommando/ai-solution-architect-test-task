@@ -1,5 +1,6 @@
 import type { AnySchemaObject } from 'ajv';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
+import { IStepTokenUsage } from '../../step/types';
 import { IParsingStepOutput } from '../../types';
 
 export interface IResolvedGapDecisionArtifact {
@@ -30,6 +31,7 @@ export interface IRunResolvingGapsStepUseCaseResponse {
   attempts: number;
   output: IResolvingGapsStepOutput;
   rawOutput: string;
+  tokenUsage: IStepTokenUsage;
 }
 
 export const RESOLVING_GAPS_STEP_INPUT_SCHEMA: AnySchemaObject = {

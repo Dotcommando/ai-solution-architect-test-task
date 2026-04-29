@@ -85,6 +85,22 @@ describe('RunOrchestratorUseCase', () => {
     };
   };
 
+  const createTokenUsage = (
+    inputTokens: number,
+    outputTokens: number,
+    totalTokens: number,
+    cachedInputTokens = 0,
+    reasoningTokens = 0,
+  ) => {
+    return {
+      cachedInputTokens,
+      inputTokens,
+      outputTokens,
+      reasoningTokens,
+      totalTokens,
+    };
+  };
+
   it('creates a run, executes parsing, and persists progress', async () => {
     const runRepository = createRunRepositoryMock();
     const runGapAnalysisStepUseCase = createRunGapAnalysisStepUseCaseMock();
@@ -128,6 +144,7 @@ describe('RunOrchestratorUseCase', () => {
         tokenReferences: [],
       },
       rawOutput: '{"businessContext":"merchant dashboard"}',
+      tokenUsage: createTokenUsage(11, 5, 16, 1, 2),
     });
     runGapAnalysisStepUseCase.execute = jest.fn().mockResolvedValue({
       attempts: 1,
@@ -139,6 +156,7 @@ describe('RunOrchestratorUseCase', () => {
       },
       rawOutput:
         '{"missingStates":["Selected state is not explicitly defined."]}',
+      tokenUsage: createTokenUsage(13, 4, 17, 0, 1),
     });
     runResolvingGapsStepUseCase.execute = jest.fn().mockResolvedValue({
       attempts: 1,
@@ -155,6 +173,7 @@ describe('RunOrchestratorUseCase', () => {
         ],
       },
       rawOutput: '{"decisions":[{"code":"define_selected_state"}]}',
+      tokenUsage: createTokenUsage(9, 3, 12),
     });
     runUserFlowsStepUseCase.execute = jest.fn().mockResolvedValue({
       attempts: 1,
@@ -212,6 +231,7 @@ describe('RunOrchestratorUseCase', () => {
         ],
       },
       rawOutput: '{"flows":[{"code":"select_saved_card_fast_path"}]}',
+      tokenUsage: createTokenUsage(15, 6, 21, 2, 1),
     });
     runComponentInterfacesStepUseCase.execute = jest
       .fn()
@@ -232,6 +252,7 @@ describe('RunOrchestratorUseCase', () => {
           returns: [],
         },
         rawOutput: '{"componentCode":"card_brand_icon"}',
+        tokenUsage: createTokenUsage(7, 2, 9),
       })
       .mockResolvedValueOnce({
         attempts: 1,
@@ -264,6 +285,7 @@ describe('RunOrchestratorUseCase', () => {
           ],
         },
         rawOutput: '{"componentCode":"payment_card"}',
+        tokenUsage: createTokenUsage(8, 3, 11, 1, 1),
       });
     runUnitTestsStepUseCase.execute = jest
       .fn()
@@ -289,6 +311,7 @@ describe('RunOrchestratorUseCase', () => {
           ],
         },
         rawOutput: '{"componentCode":"card_brand_icon"}',
+        tokenUsage: createTokenUsage(12, 5, 17),
       })
       .mockResolvedValueOnce({
         attempts: 1,
@@ -312,6 +335,7 @@ describe('RunOrchestratorUseCase', () => {
           ],
         },
         rawOutput: '{"componentCode":"payment_card"}',
+        tokenUsage: createTokenUsage(14, 6, 20, 0, 2),
       });
     runE2eTestsStepUseCase.execute = jest.fn().mockResolvedValue({
       attempts: 1,
@@ -343,6 +367,7 @@ describe('RunOrchestratorUseCase', () => {
         rootComponentName: 'Payment card',
       },
       rawOutput: '{"rootComponentCode":"payment_card"}',
+      tokenUsage: createTokenUsage(16, 7, 23, 3, 2),
     });
 
     const useCase = new RunOrchestratorUseCase(
@@ -785,8 +810,10 @@ describe('RunOrchestratorUseCase', () => {
             attempts: 1,
             code: 'parsing',
             status: 'completed',
+            tokenUsage: createTokenUsage(11, 5, 16, 1, 2),
           }),
         ],
+        tokenUsageTotals: createTokenUsage(11, 5, 16, 1, 2),
       }),
     );
     expect(runRepository.updateById).toHaveBeenNthCalledWith(
@@ -1075,44 +1102,54 @@ describe('RunOrchestratorUseCase', () => {
           }),
         }),
         id: 'run-id-1',
+        tokenUsageTotals: createTokenUsage(105, 41, 146, 7, 9),
         steps: [
           expect.objectContaining({
             code: 'parsing',
+            tokenUsage: createTokenUsage(11, 5, 16, 1, 2),
           }),
           expect.objectContaining({
             code: 'gap_analysis',
+            tokenUsage: createTokenUsage(13, 4, 17, 0, 1),
           }),
           expect.objectContaining({
             code: 'resolving_gaps',
+            tokenUsage: createTokenUsage(9, 3, 12),
           }),
           expect.objectContaining({
             code: 'user_flows',
+            tokenUsage: createTokenUsage(15, 6, 21, 2, 1),
           }),
           expect.objectContaining({
             code: 'component_interfaces',
             order: 5,
             targetComponentCode: 'card_brand_icon',
+            tokenUsage: createTokenUsage(7, 2, 9),
           }),
           expect.objectContaining({
             code: 'component_interfaces',
             order: 6,
             targetComponentCode: 'payment_card',
+            tokenUsage: createTokenUsage(8, 3, 11, 1, 1),
           }),
           expect.objectContaining({
             code: 'unit_tests',
             order: 7,
             targetComponentCode: 'card_brand_icon',
+            tokenUsage: createTokenUsage(12, 5, 17),
           }),
           expect.objectContaining({
             code: 'unit_tests',
             order: 8,
             targetComponentCode: 'payment_card',
+            tokenUsage: createTokenUsage(14, 6, 20, 0, 2),
           }),
           expect.objectContaining({
             code: 'e2e_tests',
             order: 9,
             status: 'completed',
             targetComponentCode: 'payment_card',
+            tokenUsage: createTokenUsage(16, 7, 23, 3, 2),
           }),
         ],
       }),

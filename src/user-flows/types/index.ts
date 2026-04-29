@@ -1,6 +1,7 @@
 import type { AnySchemaObject } from 'ajv';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
 import { RUN_USER_FLOW_KIND } from '../../run/constants';
+import { IStepTokenUsage } from '../../step/types';
 import { IParsingStepOutput } from '../../types';
 import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
 
@@ -42,6 +43,7 @@ export interface IRunUserFlowsStepUseCaseResponse {
   attempts: number;
   output: IUserFlowsStepOutput;
   rawOutput: string;
+  tokenUsage: IStepTokenUsage;
 }
 
 export const USER_FLOWS_STEP_INPUT_SCHEMA: AnySchemaObject = {

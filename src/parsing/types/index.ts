@@ -1,4 +1,5 @@
 import { IParsingStepOutput } from '../../types';
+import { IStepTokenUsage } from '../../step/types';
 
 export interface IRunParsingStepUseCaseRequest {
   componentDescription: string;
@@ -10,4 +11,5 @@ export interface IRunParsingStepUseCaseResponse {
   attempts: number;
   output: IParsingStepOutput;
   rawOutput: string;
+  tokenUsage: IStepTokenUsage;
 }

@@ -25,14 +25,15 @@ export class RunResolvingGapsStepUseCase {
   async execute(
     request: IRunResolvingGapsStepUseCaseRequest,
   ): Promise<IRunResolvingGapsStepUseCaseResponse> {
-    const step = await this.stepRepository.findActiveByCode(
-      RESOLVING_GAPS_STEP_CODE,
-    ) ?? DEFAULT_RESOLVING_GAPS_STEP;
+    const step =
+      (await this.stepRepository.findActiveByCode(RESOLVING_GAPS_STEP_CODE)) ??
+      DEFAULT_RESOLVING_GAPS_STEP;
 
-    const prompt = await this.promptRepository.findActiveByCodeAndVariant(
-      step.promptCode,
-      step.promptVariant,
-    ) ?? DEFAULT_RESOLVING_GAPS_PROMPT;
+    const prompt =
+      (await this.promptRepository.findActiveByCodeAndVariant(
+        step.promptCode,
+        step.promptVariant,
+      )) ?? DEFAULT_RESOLVING_GAPS_PROMPT;
 
     const input = this.buildStepInput(request);
     const result = await this.stepExecutorService.execute<
@@ -48,6 +49,7 @@ export class RunResolvingGapsStepUseCase {
       attempts: result.attempts,
       output: result.output,
       rawOutput: result.rawOutput,
+      tokenUsage: result.tokenUsage,
     };
   }
 

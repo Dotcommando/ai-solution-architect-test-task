@@ -25,14 +25,16 @@ export class RunComponentInterfacesStepUseCase {
   async execute(
     request: IRunComponentInterfacesStepUseCaseRequest,
   ): Promise<IRunComponentInterfacesStepUseCaseResponse> {
-    const step = await this.stepRepository.findActiveByCode(
-      COMPONENT_INTERFACES_STEP_CODE,
-    ) ?? DEFAULT_COMPONENT_INTERFACES_STEP;
+    const step =
+      (await this.stepRepository.findActiveByCode(
+        COMPONENT_INTERFACES_STEP_CODE,
+      )) ?? DEFAULT_COMPONENT_INTERFACES_STEP;
 
-    const prompt = await this.promptRepository.findActiveByCodeAndVariant(
-      step.promptCode,
-      step.promptVariant,
-    ) ?? DEFAULT_COMPONENT_INTERFACES_PROMPT;
+    const prompt =
+      (await this.promptRepository.findActiveByCodeAndVariant(
+        step.promptCode,
+        step.promptVariant,
+      )) ?? DEFAULT_COMPONENT_INTERFACES_PROMPT;
 
     const input = this.buildStepInput(request);
     const result = await this.stepExecutorService.execute<
@@ -48,6 +50,7 @@ export class RunComponentInterfacesStepUseCase {
       attempts: result.attempts,
       output: result.output,
       rawOutput: result.rawOutput,
+      tokenUsage: result.tokenUsage,
     };
   }
 

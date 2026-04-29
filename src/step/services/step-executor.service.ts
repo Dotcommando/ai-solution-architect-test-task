@@ -7,6 +7,7 @@ import {
   IStep,
   IStepExecutionRequest,
   IStepExecutionResult,
+  IStepTokenUsage,
 } from '../types';
 import type { IStepExecutorLlmClient } from '../types';
 
@@ -31,9 +32,7 @@ export class StepExecutorService {
     });
   }
 
-  async execute(
-    request: IStepExecutionRequest,
-  ): Promise<IStepExecutionResult>;
+  async execute(request: IStepExecutionRequest): Promise<IStepExecutionResult>;
   async execute<TInput extends object, TOutput extends object>(
     request: IStepExecutionRequest<TInput>,
   ): Promise<IStepExecutionResult<TOutput>>;
@@ -47,6 +46,7 @@ export class StepExecutorService {
 
     let attempt = 0;
     let lastError: Error | null = null;
+    let accumulatedTokenUsage = this.buildEmptyTokenUsage();
 
     for (attempt = 1; attempt <= maxAttempts; attempt += 1) {
       const userPrompt = this.buildAttemptUserPrompt(
@@ -56,19 +56,24 @@ export class StepExecutorService {
       );
 
       try {
-        const rawOutput = await this.llmClient.execute(
+        const llmResponse = await this.llmClient.execute(
           request.prompt.system,
           userPrompt,
         );
+        accumulatedTokenUsage = this.mergeTokenUsage(
+          accumulatedTokenUsage,
+          llmResponse.tokenUsage,
+        );
         const output = this.parseAndValidateOutput<TOutput>(
           request.step,
-          rawOutput,
+          llmResponse.rawOutput,
         );
 
         return {
           attempts: attempt,
           output,
-          rawOutput,
+          rawOutput: llmResponse.rawOutput,
+          tokenUsage: accumulatedTokenUsage,
         };
       } catch (error) {
         lastError = this.normalizeError(error);
@@ -89,10 +94,7 @@ export class StepExecutorService {
       return baseUserPrompt;
     }
 
-    if (
-      step.outputSchema === null
-      || !step.validation.validateOutputSchema
-    ) {
+    if (step.outputSchema === null || !step.validation.validateOutputSchema) {
       return `${baseUserPrompt}\n\nPrevious error: ${error.message}\nRegenerate the full JSON response from scratch.\nReturn valid JSON only.`;
     }
 
@@ -113,10 +115,7 @@ export class StepExecutorService {
   ): TOutput {
     const parsedOutput = this.parseJson(rawOutput);
 
-    if (
-      step.validation.validateOutputSchema
-      && step.outputSchema !== null
-    ) {
+    if (step.validation.validateOutputSchema && step.outputSchema !== null) {
       const validate = this.ajv.compile(step.outputSchema);
 
       if (!validate(parsedOutput)) {
@@ -127,9 +126,7 @@ export class StepExecutorService {
     }
 
     if (!this.isJsonObject(parsedOutput)) {
-      throw new StepExecutionError(
-        'LLM output must be a JSON object',
-      );
+      throw new StepExecutionError('LLM output must be a JSON object');
     }
 
     return parsedOutput as TOutput;
@@ -145,20 +142,14 @@ export class StepExecutorService {
     }
   }
 
-  private renderUserPrompt(
-    prompt: IPrompt,
-    input: object,
-  ): string {
+  private renderUserPrompt(prompt: IPrompt, input: object): string {
     const serializedInput = JSON.stringify(input, null, 2);
 
     return prompt.userTemplate.replaceAll('{{input}}', serializedInput);
   }
 
   private validateInput(step: IStep, input: object): void {
-    if (
-      !step.validation.validateInputSchema
-      || step.inputSchema === null
-    ) {
+    if (!step.validation.validateInputSchema || step.inputSchema === null) {
       return;
     }
 
@@ -172,17 +163,14 @@ export class StepExecutorService {
   }
 
   private formatAjvErrors(errors: ErrorObject[] | null | undefined): string {
-    if (
-      errors === null
-      || errors === undefined
-      || errors.length === 0
-    ) {
+    if (errors === null || errors === undefined || errors.length === 0) {
       return 'unknown validation error';
     }
 
     return errors
       .map((error) => {
-        const instancePath = error.instancePath === '' ? '/' : error.instancePath;
+        const instancePath =
+          error.instancePath === '' ? '/' : error.instancePath;
         const message = error.message ?? 'validation error';
 
         return `${instancePath} ${message}`;
@@ -190,13 +178,56 @@ export class StepExecutorService {
       .join('; ');
   }
 
-  private isJsonObject(
-    value: unknown,
-  ): value is Record<string, unknown> {
-    return (
-      value !== null
-      && !Array.isArray(value)
-      && typeof value === 'object'
-    );
+  private isJsonObject(value: unknown): value is Record<string, unknown> {
+    return value !== null && !Array.isArray(value) && typeof value === 'object';
+  }
+
+  private buildEmptyTokenUsage(): IStepTokenUsage {
+    return {
+      cachedInputTokens: null,
+      inputTokens: null,
+      outputTokens: null,
+      reasoningTokens: null,
+      totalTokens: null,
+    };
+  }
+
+  private mergeTokenUsage(
+    current: IStepTokenUsage,
+    incoming: IStepTokenUsage,
+  ): IStepTokenUsage {
+    return {
+      cachedInputTokens: this.sumNullableTokenCount(
+        current.cachedInputTokens,
+        incoming.cachedInputTokens,
+      ),
+      inputTokens: this.sumNullableTokenCount(
+        current.inputTokens,
+        incoming.inputTokens,
+      ),
+      outputTokens: this.sumNullableTokenCount(
+        current.outputTokens,
+        incoming.outputTokens,
+      ),
+      reasoningTokens: this.sumNullableTokenCount(
+        current.reasoningTokens,
+        incoming.reasoningTokens,
+      ),
+      totalTokens: this.sumNullableTokenCount(
+        current.totalTokens,
+        incoming.totalTokens,
+      ),
+    };
+  }
+
+  private sumNullableTokenCount(
+    current: number | null,
+    incoming: number | null,
+  ): number | null {
+    if (current === null && incoming === null) {
+      return null;
+    }
+
+    return (current ?? 0) + (incoming ?? 0);
   }
 }

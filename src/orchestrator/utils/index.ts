@@ -31,6 +31,7 @@ import {
   IUnitTestsStepOutput,
 } from '../../unit-tests/types';
 import { IUserFlowsStepOutput } from '../../user-flows/types';
+import { IStepTokenUsage } from '../../step/types';
 import type {
   IRunOrchestratorRequest,
   IRunOrchestratorResponse,
@@ -45,6 +46,7 @@ interface IBuildBaseStepReportParams {
   promptCode: string;
   rawOutput: string;
   targetComponentCode: string | null;
+  tokenUsage: IRunStepTokenUsage;
 }
 
 export function buildArtifactsFromParsing(
@@ -162,6 +164,7 @@ export function buildParsingStepReport(
   attempts: number,
   output: IRunOrchestratorResponse['parsing'],
   rawOutput: string,
+  tokenUsage: IRunStepTokenUsage,
 ): IRunStepReport {
   return buildBaseCompletedStepReport({
     attempts,
@@ -172,6 +175,7 @@ export function buildParsingStepReport(
     promptCode: 'parsing',
     rawOutput,
     targetComponentCode: null,
+    tokenUsage,
   });
 }
 
@@ -180,6 +184,7 @@ export function buildGapAnalysisStepReport(
   attempts: number,
   output: IGapAnalysisStepOutput,
   rawOutput: string,
+  tokenUsage: IRunStepTokenUsage,
 ): IRunStepReport {
   return buildBaseCompletedStepReport({
     attempts,
@@ -192,6 +197,7 @@ export function buildGapAnalysisStepReport(
     promptCode: 'gap_analysis',
     rawOutput,
     targetComponentCode: null,
+    tokenUsage,
   });
 }
 
@@ -200,6 +206,7 @@ export function buildResolvingGapsStepReport(
   attempts: number,
   output: IResolvingGapsStepOutput,
   rawOutput: string,
+  tokenUsage: IRunStepTokenUsage,
 ): IRunStepReport {
   return buildBaseCompletedStepReport({
     attempts,
@@ -212,6 +219,7 @@ export function buildResolvingGapsStepReport(
     promptCode: 'resolving_gaps',
     rawOutput,
     targetComponentCode: null,
+    tokenUsage,
   });
 }
 
@@ -220,6 +228,7 @@ export function buildUserFlowsStepReport(
   attempts: number,
   output: IUserFlowsStepOutput,
   rawOutput: string,
+  tokenUsage: IRunStepTokenUsage,
 ): IRunStepReport {
   return buildBaseCompletedStepReport({
     attempts,
@@ -232,6 +241,7 @@ export function buildUserFlowsStepReport(
     promptCode: 'user_flows',
     rawOutput,
     targetComponentCode: null,
+    tokenUsage,
   });
 }
 
@@ -241,6 +251,7 @@ export function buildComponentInterfacesStepReport(
   output: IComponentInterfacesStepOutput,
   rawOutput: string,
   order: number,
+  tokenUsage: IRunStepTokenUsage,
 ): IRunStepReport {
   return buildBaseCompletedStepReport({
     attempts,
@@ -251,6 +262,7 @@ export function buildComponentInterfacesStepReport(
     promptCode: 'component_interfaces',
     rawOutput,
     targetComponentCode: output.componentCode,
+    tokenUsage,
   });
 }
 
@@ -260,6 +272,7 @@ export function buildUnitTestsStepReport(
   output: IUnitTestsStepOutput,
   rawOutput: string,
   order: number,
+  tokenUsage: IRunStepTokenUsage,
 ): IRunStepReport {
   return buildBaseCompletedStepReport({
     attempts,
@@ -270,6 +283,7 @@ export function buildUnitTestsStepReport(
     promptCode: 'unit_tests',
     rawOutput,
     targetComponentCode: output.componentCode,
+    tokenUsage,
   });
 }
 
@@ -279,6 +293,7 @@ export function buildE2eTestsStepReport(
   output: IE2eTestsStepOutput,
   rawOutput: string,
   order: number,
+  tokenUsage: IRunStepTokenUsage,
 ): IRunStepReport {
   return buildBaseCompletedStepReport({
     attempts,
@@ -289,6 +304,7 @@ export function buildE2eTestsStepReport(
     promptCode: 'e2e_tests',
     rawOutput,
     targetComponentCode: output.rootComponentCode,
+    tokenUsage,
   });
 }
 
@@ -465,6 +481,18 @@ export function buildEmptyStepTokenUsage(): IRunStepTokenUsage {
   };
 }
 
+export function buildRunStepTokenUsage(
+  tokenUsage: IStepTokenUsage,
+): IRunStepTokenUsage {
+  return {
+    cachedInputTokens: tokenUsage.cachedInputTokens,
+    inputTokens: tokenUsage.inputTokens,
+    outputTokens: tokenUsage.outputTokens,
+    reasoningTokens: tokenUsage.reasoningTokens,
+    totalTokens: tokenUsage.totalTokens,
+  };
+}
+
 export function serializeOutputJson(output: object): string {
   return JSON.stringify(output);
 }
@@ -588,7 +616,7 @@ function buildBaseCompletedStepReport(
     startedAt: now,
     status: RUN_STEP_STATUS.COMPLETED,
     targetComponentCode: params.targetComponentCode,
-    tokenUsage: buildEmptyStepTokenUsage(),
+    tokenUsage: params.tokenUsage,
   };
 }
 

@@ -195,6 +195,13 @@ describe('RunUnitTestsStepUseCase', () => {
         attempts: 1,
         output: createOutput(),
         rawOutput: '{"componentCode":"card_brand_icon"}',
+        tokenUsage: {
+          cachedInputTokens: 0,
+          inputTokens: 12,
+          outputTokens: 4,
+          reasoningTokens: 1,
+          totalTokens: 16,
+        },
       };
     };
 

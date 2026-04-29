@@ -25,14 +25,15 @@ export class RunUserFlowsStepUseCase {
   async execute(
     request: IRunUserFlowsStepUseCaseRequest,
   ): Promise<IRunUserFlowsStepUseCaseResponse> {
-    const step = await this.stepRepository.findActiveByCode(
-      USER_FLOWS_STEP_CODE,
-    ) ?? DEFAULT_USER_FLOWS_STEP;
+    const step =
+      (await this.stepRepository.findActiveByCode(USER_FLOWS_STEP_CODE)) ??
+      DEFAULT_USER_FLOWS_STEP;
 
-    const prompt = await this.promptRepository.findActiveByCodeAndVariant(
-      step.promptCode,
-      step.promptVariant,
-    ) ?? DEFAULT_USER_FLOWS_PROMPT;
+    const prompt =
+      (await this.promptRepository.findActiveByCodeAndVariant(
+        step.promptCode,
+        step.promptVariant,
+      )) ?? DEFAULT_USER_FLOWS_PROMPT;
 
     const input = this.buildStepInput(request);
     const result = await this.stepExecutorService.execute<
@@ -48,6 +49,7 @@ export class RunUserFlowsStepUseCase {
       attempts: result.attempts,
       output: result.output,
       rawOutput: result.rawOutput,
+      tokenUsage: result.tokenUsage,
     };
   }
 

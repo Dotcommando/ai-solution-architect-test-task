@@ -28,14 +28,31 @@ export interface IStepExecutionRequest<
   step: IStep;
 }
 
+export interface IStepTokenUsage {
+  cachedInputTokens: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+  totalTokens: number | null;
+}
+
+export interface IStepExecutorLlmResponse {
+  rawOutput: string;
+  tokenUsage: IStepTokenUsage;
+}
+
 export interface IStepExecutionResult<
   TOutput extends object = Record<string, unknown>,
 > {
   attempts: number;
   output: TOutput;
   rawOutput: string;
+  tokenUsage: IStepTokenUsage;
 }
 
 export interface IStepExecutorLlmClient {
-  execute(systemPrompt: string, userPrompt: string): Promise<string>;
+  execute(
+    systemPrompt: string,
+    userPrompt: string,
+  ): Promise<IStepExecutorLlmResponse>;
 }

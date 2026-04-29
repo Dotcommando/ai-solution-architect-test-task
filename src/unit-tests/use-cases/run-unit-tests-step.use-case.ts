@@ -49,6 +49,7 @@ export class RunUnitTestsStepUseCase {
       attempts: result.attempts,
       output: result.output,
       rawOutput: result.rawOutput,
+      tokenUsage: result.tokenUsage,
     };
   }
 

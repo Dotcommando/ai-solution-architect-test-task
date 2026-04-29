@@ -2915,5 +2915,617 @@
       "validateOutputSchema": true
     },
     "isActive": true
+  },
+  {
+    "v": 1,
+    "name": "Component Generation",
+    "purpose": "Generate implementation code for exactly one target component at a time using narrowed target-only context, direct collaborator contracts for smart components, and file-based output.",
+    "code": "component_generation",
+    "promptCode": "component_generation",
+    "promptVariant": "control",
+    "inputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "$defs": {
+        "componentFileReference": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "componentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "filename": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "componentCode",
+            "filename"
+          ]
+        },
+        "componentInterfaceField": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "description": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "description",
+            "name",
+            "required",
+            "type"
+          ]
+        },
+        "componentInterface": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "accepts": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/componentInterfaceField"
+              }
+            },
+            "componentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "returns": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/componentInterfaceField"
+              }
+            }
+          },
+          "required": [
+            "accepts",
+            "componentCode",
+            "componentName",
+            "returns"
+          ]
+        },
+        "generatedFile": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "filename": {
+              "type": "string",
+              "minLength": 1
+            },
+            "content": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "filename",
+            "content"
+          ]
+        },
+        "unitTestComponent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "componentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentName": {
+              "type": "string",
+              "minLength": 1
+            },
+            "coveredBehaviors": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "coveredStates": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/generatedFile"
+              }
+            }
+          },
+          "required": [
+            "componentCode",
+            "componentName",
+            "coveredBehaviors",
+            "coveredStates",
+            "files"
+          ]
+        },
+        "userFlowStep": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "type": "string",
+              "minLength": 1
+            },
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "componentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "expectedResult": {
+              "type": "string",
+              "minLength": 1
+            },
+            "inputData": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "action",
+            "code",
+            "componentCode",
+            "expectedResult",
+            "inputData"
+          ]
+        },
+        "userFlow": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "completionCriteria": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kind": {
+              "enum": [
+                "exploratory_happy",
+                "shortest_happy",
+                "unhappy_invalid_input"
+              ]
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "steps": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/userFlowStep"
+              }
+            }
+          },
+          "required": [
+            "code",
+            "completionCriteria",
+            "kind",
+            "name",
+            "steps"
+          ]
+        },
+        "e2eTests": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "coveredBehaviors": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "coveredComponentCodes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "coveredFlowCodes": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "coveredStates": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/generatedFile"
+              }
+            },
+            "rootComponentCode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rootComponentName": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "coveredBehaviors",
+            "coveredComponentCodes",
+            "coveredFlowCodes",
+            "coveredStates",
+            "files",
+            "rootComponentCode",
+            "rootComponentName"
+          ]
+        }
+      },
+      "properties": {
+        "componentDescription": {
+          "type": "string",
+          "minLength": 1
+        },
+        "framework": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gapAnalysis": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "accessibilityGaps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "missingStates": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "recommendations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "responsiveGaps": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "accessibilityGaps",
+            "missingStates",
+            "recommendations",
+            "responsiveGaps"
+          ]
+        },
+        "parsing": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "businessContext",
+            "components",
+            "constraints",
+            "content",
+            "interactions",
+            "rootComponentCode",
+            "specifiedStates",
+            "tokenReferences"
+          ]
+        },
+        "projectRootPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "relatedComponentInterfaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/componentInterface"
+          }
+        },
+        "relatedComponentSourceFiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/componentFileReference"
+          }
+        },
+        "resolvingGaps": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "decisions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "affectedComponentCodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "decision": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "rationale": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "sourceGap": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "affectedComponentCodes",
+                  "code",
+                  "decision",
+                  "rationale",
+                  "sourceGap"
+                ]
+              }
+            }
+          },
+          "required": [
+            "decisions"
+          ]
+        },
+        "targetComponent": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "parentCode": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "purpose": {
+              "type": "string",
+              "minLength": 1
+            },
+            "statePolicy": {
+              "enum": [
+                "dumb",
+                "smart"
+              ]
+            },
+            "type": {
+              "enum": [
+                "action",
+                "badge",
+                "button",
+                "card",
+                "field",
+                "file_upload",
+                "form",
+                "icon",
+                "modal",
+                "page",
+                "pagination",
+                "status",
+                "step_indicator",
+                "table",
+                "wizard"
+              ]
+            }
+          },
+          "required": [
+            "code",
+            "name",
+            "parentCode",
+            "purpose",
+            "statePolicy",
+            "type"
+          ]
+        },
+        "targetComponentInterface": {
+          "$ref": "#/$defs/componentInterface"
+        },
+        "targetSourceFilePath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "targetUnitTests": {
+          "$ref": "#/$defs/unitTestComponent"
+        },
+        "testFramework": {
+          "type": "string",
+          "minLength": 1
+        },
+        "e2eTests": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/e2eTests"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "userFlows": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "flows": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/userFlow"
+              }
+            }
+          },
+          "required": [
+            "flows"
+          ]
+        }
+      },
+      "required": [
+        "componentDescription",
+        "framework",
+        "gapAnalysis",
+        "parsing",
+        "projectRootPath",
+        "relatedComponentInterfaces",
+        "relatedComponentSourceFiles",
+        "resolvingGaps",
+        "targetComponent",
+        "targetComponentInterface",
+        "targetSourceFilePath",
+        "targetUnitTests",
+        "testFramework",
+        "e2eTests",
+        "userFlows"
+      ]
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "additionalProperties": false,
+      "$defs": {
+        "generatedFile": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "filename": {
+              "type": "string",
+              "minLength": 1
+            },
+            "content": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "filename",
+            "content"
+          ]
+        }
+      },
+      "properties": {
+        "componentCode": {
+          "type": "string",
+          "minLength": 1
+        },
+        "componentName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/generatedFile"
+          }
+        },
+        "statesCovered": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "tokensUsed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "required": [
+        "componentCode",
+        "componentName",
+        "files",
+        "statesCovered",
+        "tokensUsed"
+      ]
+    },
+    "maxRetries": 2,
+    "validation": {
+      "validateInputSchema": true,
+      "validateOutputSchema": true
+    },
+    "isActive": true
   }
 ]

@@ -1,6 +1,7 @@
 import type { AnySchemaObject } from 'ajv';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
 import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
+import { IStepTokenUsage } from '../../step/types';
 import {
   COMPONENT_STATE_POLICY_ARRAY,
   IParsedComponent,
@@ -46,6 +47,7 @@ export interface IRunComponentInterfacesStepUseCaseResponse {
   attempts: number;
   output: IComponentInterfacesStepOutput;
   rawOutput: string;
+  tokenUsage: IStepTokenUsage;
 }
 
 export const COMPONENT_INTERFACES_STEP_INPUT_SCHEMA: AnySchemaObject = {
@@ -189,7 +191,14 @@ export const COMPONENT_INTERFACES_STEP_INPUT_SCHEMA: AnySchemaObject = {
           enum: UI_COMPONENT_TYPE_ARRAY,
         },
       },
-      required: ['code', 'name', 'parentCode', 'purpose', 'statePolicy', 'type'],
+      required: [
+        'code',
+        'name',
+        'parentCode',
+        'purpose',
+        'statePolicy',
+        'type',
+      ],
       type: 'object',
     },
     userFlows: {

@@ -78,6 +78,13 @@ describe('RunGapAnalysisStepUseCase', () => {
       attempts: 1,
       output: createOutput(),
       rawOutput: '{"missingStates":["Selected state is not explicitly defined."]}',
+      tokenUsage: {
+        cachedInputTokens: 0,
+        inputTokens: 12,
+        outputTokens: 4,
+        reasoningTokens: 1,
+        totalTokens: 16,
+      },
     };
   };
 

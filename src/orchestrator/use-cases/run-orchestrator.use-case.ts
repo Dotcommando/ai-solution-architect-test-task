@@ -53,6 +53,7 @@ import {
   buildResolvingGapsStepReport,
   buildRunCompletedUpdate,
   buildRunFailedUpdate,
+  buildRunStepTokenUsage,
   buildRunStartedUpdate,
   buildTokenUsageTotals,
   buildUnitTestsStageInput,
@@ -96,6 +97,7 @@ export class RunOrchestratorUseCase {
         parsingResult.attempts,
         parsingResult.output,
         parsingResult.rawOutput,
+        buildRunStepTokenUsage(parsingResult.tokenUsage),
       );
 
       await this.saveRunProgress(runId, parsingArtifacts, parsingDerivedData, [
@@ -117,6 +119,7 @@ export class RunOrchestratorUseCase {
           gapAnalysisResult.attempts,
           gapAnalysisResult.output,
           gapAnalysisResult.rawOutput,
+          buildRunStepTokenUsage(gapAnalysisResult.tokenUsage),
         ),
       );
 
@@ -143,6 +146,7 @@ export class RunOrchestratorUseCase {
           resolvingGapsResult.attempts,
           resolvingGapsResult.output,
           resolvingGapsResult.rawOutput,
+          buildRunStepTokenUsage(resolvingGapsResult.tokenUsage),
         ),
       );
 
@@ -170,6 +174,7 @@ export class RunOrchestratorUseCase {
           userFlowsResult.attempts,
           userFlowsResult.output,
           userFlowsResult.rawOutput,
+          buildRunStepTokenUsage(userFlowsResult.tokenUsage),
         ),
       );
 
@@ -210,6 +215,7 @@ export class RunOrchestratorUseCase {
             componentInterfacesResult.output,
             componentInterfacesResult.rawOutput,
             stepsWithComponentInterfaces.length + 1,
+            buildRunStepTokenUsage(componentInterfacesResult.tokenUsage),
           ),
         );
 
@@ -284,6 +290,7 @@ export class RunOrchestratorUseCase {
             unitTestsResult.output,
             unitTestsResult.rawOutput,
             stepsWithUnitTests.length + 1,
+            buildRunStepTokenUsage(unitTestsResult.tokenUsage),
           ),
         );
 
@@ -350,6 +357,7 @@ export class RunOrchestratorUseCase {
           e2eTestsResult.output,
           e2eTestsResult.rawOutput,
           stepsWithUnitTests.length + 1,
+          buildRunStepTokenUsage(e2eTestsResult.tokenUsage),
         ),
       );
 

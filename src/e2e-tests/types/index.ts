@@ -13,6 +13,7 @@ import {
   IUnitTestsStepOutput,
 } from '../../unit-tests/types';
 import { RUN_USER_FLOW_KIND } from '../../run/constants';
+import { IStepTokenUsage } from '../../step/types';
 import { IUserFlowsStepOutput } from '../../user-flows/types';
 
 export interface IGeneratedE2eTestFile {
@@ -78,6 +79,7 @@ export interface IRunE2eTestsStepUseCaseResponse {
   attempts: number;
   output: IE2eTestsStepOutput;
   rawOutput: string;
+  tokenUsage: IStepTokenUsage;
 }
 
 export const E2E_TESTS_STEP_INPUT_SCHEMA: AnySchemaObject = {

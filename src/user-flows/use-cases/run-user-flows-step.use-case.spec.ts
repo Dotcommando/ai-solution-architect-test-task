@@ -146,6 +146,13 @@ describe('RunUserFlowsStepUseCase', () => {
       attempts: 1,
       output: createOutput(),
       rawOutput: '{"flows":[{"code":"select_saved_card_fast_path"}]}',
+      tokenUsage: {
+        cachedInputTokens: 0,
+        inputTokens: 12,
+        outputTokens: 4,
+        reasoningTokens: 1,
+        totalTokens: 16,
+      },
     };
   };
 

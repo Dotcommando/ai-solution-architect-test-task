@@ -243,6 +243,13 @@ describe('RunE2eTestsStepUseCase', () => {
         attempts: 1,
         output: createOutput(),
         rawOutput: '{"rootComponentCode":"payment_card"}',
+        tokenUsage: {
+          cachedInputTokens: 0,
+          inputTokens: 12,
+          outputTokens: 4,
+          reasoningTokens: 1,
+          totalTokens: 16,
+        },
       };
     };
 

@@ -9,6 +9,7 @@ import {
   UI_COMPONENT_TYPE_ARRAY,
 } from '../../types';
 import { RUN_USER_FLOW_KIND } from '../../run/constants';
+import { IStepTokenUsage } from '../../step/types';
 import { IUserFlowsStepOutput } from '../../user-flows/types';
 
 export interface IComponentFileReference {
@@ -71,6 +72,7 @@ export interface IRunUnitTestsStepUseCaseResponse {
   attempts: number;
   output: IUnitTestsStepOutput;
   rawOutput: string;
+  tokenUsage: IStepTokenUsage;
 }
 
 export const UNIT_TESTS_STEP_INPUT_SCHEMA: AnySchemaObject = {

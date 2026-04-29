@@ -1,4 +1,5 @@
 import type { AnySchemaObject } from 'ajv';
+import { IStepTokenUsage } from '../../step/types';
 import { IParsingStepOutput } from '../../types';
 
 export interface IGapAnalysisStepInput {
@@ -22,6 +23,7 @@ export interface IRunGapAnalysisStepUseCaseResponse {
   attempts: number;
   output: IGapAnalysisStepOutput;
   rawOutput: string;
+  tokenUsage: IStepTokenUsage;
 }
 
 export const GAP_ANALYSIS_STEP_INPUT_SCHEMA: AnySchemaObject = {

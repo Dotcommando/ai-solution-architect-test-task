@@ -93,6 +93,13 @@ describe('RunResolvingGapsStepUseCase', () => {
       attempts: 1,
       output: createOutput(),
       rawOutput: '{"decisions":[{"code":"define_selected_state"}]}',
+      tokenUsage: {
+        cachedInputTokens: 0,
+        inputTokens: 12,
+        outputTokens: 4,
+        reasoningTokens: 1,
+        totalTokens: 16,
+      },
     };
   };
 
