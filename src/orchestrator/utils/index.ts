@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import {
+  IComponentGenerationValidationFeedback,
   IComponentGenerationStepInput,
   IComponentGenerationStepOutput,
 } from '../../component-generation/types';
@@ -22,6 +23,7 @@ import {
   IRunStepReport,
   IRunStepTokenUsage,
   IRunTokenUsageTotals,
+  IRunValidationArtifact,
 } from '../../run/types';
 import {
   COMPONENT_STATE_POLICY,
@@ -35,6 +37,11 @@ import {
   IUnitTestsStepOutput,
 } from '../../unit-tests/types';
 import { IUserFlowsStepOutput } from '../../user-flows/types';
+import {
+  IRunValidationStepUseCaseRequest,
+  IValidationRegenerationReason,
+  IValidationStepOutput,
+} from '../../validation/types';
 import { IStepTokenUsage } from '../../step/types';
 import type {
   IRunOrchestratorRequest,
@@ -149,7 +156,14 @@ export function buildArtifactsWithGeneratedComponent(
     statesCovered: generatedComponentOutput.statesCovered,
     tokensUsed: generatedComponentOutput.tokensUsed,
   };
-  const components = [...existingComponents, generatedComponent];
+  const components = [
+    ...existingComponents.filter((component) => {
+      return component.componentCode !== generatedComponent.componentCode;
+    }),
+    generatedComponent,
+  ].sort((left, right) => {
+    return left.componentCode.localeCompare(right.componentCode);
+  });
 
   return {
     ...artifacts,
@@ -170,6 +184,16 @@ export function buildArtifactsWithGeneratedComponent(
         }),
       ),
     },
+  };
+}
+
+export function buildArtifactsWithValidation(
+  artifacts: IRunArtifacts,
+  validationOutput: IRunValidationArtifact,
+): IRunArtifacts {
+  return {
+    ...artifacts,
+    validation: validationOutput,
   };
 }
 
@@ -369,6 +393,27 @@ export function buildComponentGenerationStepReport(
   });
 }
 
+export function buildValidationStepReport(
+  input: IRunValidationStepUseCaseRequest,
+  attempts: number,
+  output: IValidationStepOutput,
+  rawOutput: string,
+  order: number,
+  tokenUsage: IRunStepTokenUsage,
+): IRunStepReport {
+  return buildBaseCompletedStepReport({
+    attempts,
+    code: RUN_STEP_CODE.VALIDATION,
+    inputJson: JSON.stringify(input),
+    order,
+    output,
+    promptCode: 'validation',
+    rawOutput,
+    targetComponentCode: null,
+    tokenUsage,
+  });
+}
+
 export function buildComponentInterfacesStageInput(
   request: IRunOrchestratorRequest,
   parsing: IRunOrchestratorResponse['parsing'],
@@ -403,6 +448,27 @@ export function buildComponentGenerationStageInput(
   input: IComponentGenerationStepInput,
 ): IComponentGenerationStepInput {
   return input;
+}
+
+export function buildValidationStageInput(
+  input: IRunValidationStepUseCaseRequest,
+): IRunValidationStepUseCaseRequest {
+  return input;
+}
+
+export function buildValidationFeedbackForComponent(
+  regenerationReasons: IValidationRegenerationReason[],
+  componentCode: string,
+): IComponentGenerationValidationFeedback | null {
+  const matchingReason = regenerationReasons.find((reason) => {
+    return reason.componentCode === componentCode;
+  });
+
+  return matchingReason === undefined
+    ? null
+    : {
+        reasons: matchingReason.reasons,
+      };
 }
 
 export function orderComponentsForInterfaces(

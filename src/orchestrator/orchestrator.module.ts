@@ -8,6 +8,7 @@ import { ResolvingGapsModule } from '../resolving-gaps/resolving-gaps.module';
 import { RunModule } from '../run/run.module';
 import { UnitTestsModule } from '../unit-tests/unit-tests.module';
 import { UserFlowsModule } from '../user-flows/user-flows.module';
+import { ValidationModule } from '../validation/validation.module';
 import { RunOrchestratorUseCase } from './use-cases/run-orchestrator.use-case';
 
 @Module({
@@ -22,6 +23,7 @@ import { RunOrchestratorUseCase } from './use-cases/run-orchestrator.use-case';
     RunModule,
     UnitTestsModule,
     UserFlowsModule,
+    ValidationModule,
   ],
   providers: [RunOrchestratorUseCase],
 })

@@ -186,11 +186,19 @@ export interface IRunValidationStateCoverageArtifact {
   totalCount: number;
 }
 
+export interface IRunValidationRegenerationReasonArtifact {
+  componentCode: string;
+  reasons: string[];
+}
+
 export interface IRunValidationArtifact {
   accessibilityScore: string;
+  affectedComponentCodes: string[];
   contractCompatibilityIssues: string[];
   hallucinationsCaught: string[];
+  isRegenerationRequired: boolean;
   issuesFound: string[];
+  regenerationReasons: IRunValidationRegenerationReasonArtifact[];
   stateCoverage: IRunValidationStateCoverageArtifact;
   tokenCompliance: boolean;
 }

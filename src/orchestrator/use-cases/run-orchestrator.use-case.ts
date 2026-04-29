@@ -7,6 +7,7 @@ import { IComponentGenerationStepInput } from '../../component-generation/types'
 import { RunComponentGenerationStepUseCase } from '../../component-generation/use-cases/run-component-generation-step.use-case';
 import { RunComponentInterfacesStepUseCase } from '../../component-interfaces/use-cases/run-component-interfaces-step.use-case';
 import { IComponentInterfacesStepInput } from '../../component-interfaces/types';
+import { DEFAULT_DESIGN_SYSTEM_CONTEXT } from '../../design-system/constants';
 import {
   E2E_TESTS_DEFAULT_TEST_FRAMEWORK,
   E2E_TESTS_FILE_SUFFIX,
@@ -15,6 +16,7 @@ import { IE2eTestsStepInput } from '../../e2e-tests/types';
 import { RunE2eTestsStepUseCase } from '../../e2e-tests/use-cases/run-e2e-tests-step.use-case';
 import { RunGapAnalysisStepUseCase } from '../../gap-analysis/use-cases/run-gap-analysis-step.use-case';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
+import { ORCHESTRATOR_MAX_VALIDATION_PASSES } from '../constants';
 import { RunParsingStepUseCase } from '../../parsing/use-cases/run-parsing-step.use-case';
 import { RunResolvingGapsStepUseCase } from '../../resolving-gaps/use-cases/run-resolving-gaps-step.use-case';
 import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
@@ -32,6 +34,8 @@ import {
 import { IUnitTestsStepInput } from '../../unit-tests/types';
 import { RunUnitTestsStepUseCase } from '../../unit-tests/use-cases/run-unit-tests-step.use-case';
 import { RunUserFlowsStepUseCase } from '../../user-flows/use-cases/run-user-flows-step.use-case';
+import { IRunValidationStepUseCaseRequest } from '../../validation/types';
+import { RunValidationStepUseCase } from '../../validation/use-cases/run-validation-step.use-case';
 import { COMPONENT_STATE_POLICY } from '../../types';
 import type {
   IRunOrchestratorRequest,
@@ -47,6 +51,7 @@ import {
   buildArtifactsWithResolvingGaps,
   buildArtifactsWithUnitTest,
   buildArtifactsWithUserFlows,
+  buildArtifactsWithValidation,
   buildComponentGenerationStageInput,
   buildComponentGenerationStepReport,
   buildComponentInterfacesStageInput,
@@ -71,6 +76,9 @@ import {
   buildUnitTestsStageInput,
   buildUnitTestsStepReport,
   buildUserFlowsStepReport,
+  buildValidationStageInput,
+  buildValidationFeedbackForComponent,
+  buildValidationStepReport,
   findComponentInterface,
   findComponentSourceFile,
   findRelatedDumbComponentsForGeneration,
@@ -92,6 +100,7 @@ export class RunOrchestratorUseCase {
     private readonly runUnitTestsStepUseCase: RunUnitTestsStepUseCase,
     private readonly runE2eTestsStepUseCase: RunE2eTestsStepUseCase,
     private readonly runComponentGenerationStepUseCase: RunComponentGenerationStepUseCase,
+    private readonly runValidationStepUseCase: RunValidationStepUseCase,
   ) {}
 
   async run(
@@ -415,6 +424,7 @@ export class RunOrchestratorUseCase {
           );
         const componentGenerationInput = buildComponentGenerationStageInput({
           componentDescription: request.componentDescription,
+          designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
           e2eTests:
             targetComponent.statePolicy === COMPONENT_STATE_POLICY.SMART
               ? artifactsWithE2eTests.e2eTests
@@ -431,6 +441,7 @@ export class RunOrchestratorUseCase {
           targetSourceFilePath,
           targetUnitTests,
           testFramework: COMPONENT_GENERATION_DEFAULT_TEST_FRAMEWORK,
+          validationFeedback: null,
           userFlows: userFlowsResult.output,
         });
         const componentGenerationResult =
@@ -459,6 +470,160 @@ export class RunOrchestratorUseCase {
           parsingDerivedData,
           stepsWithGeneratedCode,
         );
+      }
+
+      let artifactsWithValidation = artifactsWithGeneratedCode;
+      let stepsWithValidation = stepsWithGeneratedCode;
+
+      for (
+        let validationPass = 0;
+        validationPass < ORCHESTRATOR_MAX_VALIDATION_PASSES;
+        validationPass += 1
+      ) {
+        const generatedCode = artifactsWithValidation.generatedCode;
+
+        if (generatedCode === null) {
+          throw new Error('Generated code artifact is required for validation');
+        }
+
+        const validationInput = buildValidationStageInput({
+          componentDescription: request.componentDescription,
+          componentInterfaces,
+          designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
+          e2eTests: artifactsWithValidation.e2eTests,
+          generatedCode,
+          gapAnalysis: gapAnalysisResult.output,
+          parsing: parsingResult.output,
+          resolvingGaps: resolvingGapsResult.output,
+          unitTests,
+          userFlows: userFlowsResult.output,
+        });
+        const validationResult = await this.runValidationStage(validationInput);
+
+        artifactsWithValidation = buildArtifactsWithValidation(
+          artifactsWithValidation,
+          validationResult.output,
+        );
+        stepsWithValidation = appendStepReport(
+          stepsWithValidation,
+          buildValidationStepReport(
+            validationInput,
+            validationResult.attempts,
+            validationResult.output,
+            validationResult.rawOutput,
+            stepsWithValidation.length + 1,
+            buildRunStepTokenUsage(validationResult.tokenUsage),
+          ),
+        );
+
+        await this.saveRunProgress(
+          runId,
+          artifactsWithValidation,
+          parsingDerivedData,
+          stepsWithValidation,
+        );
+
+        if (!validationResult.output.isRegenerationRequired) {
+          break;
+        }
+
+        if (validationPass === ORCHESTRATOR_MAX_VALIDATION_PASSES - 1) {
+          throw new Error(
+            'Validation did not converge within the allowed regeneration passes',
+          );
+        }
+
+        const regenerationTargets = orderedComponents.filter((component) => {
+          return validationResult.output.affectedComponentCodes.includes(
+            component.code,
+          );
+        });
+
+        if (regenerationTargets.length === 0) {
+          throw new Error(
+            'Validation requested regeneration but no matching components were found',
+          );
+        }
+
+        for (const targetComponent of regenerationTargets) {
+          const targetComponentInterface = findComponentInterface(
+            componentInterfaces.components,
+            targetComponent.code,
+          );
+          const targetUnitTests = findUnitTestComponent(
+            unitTests.components,
+            targetComponent.code,
+          );
+          const targetSourceFilePath = findComponentSourceFile(
+            componentSourceFiles,
+            targetComponent.code,
+          );
+          const relatedComponents = findRelatedDumbComponentsForGeneration(
+            orderedComponents,
+            targetComponent,
+          );
+          const relatedComponentInterfaces =
+            buildRelatedComponentInterfacesForGeneration(
+              componentInterfaces.components,
+              relatedComponents,
+            );
+          const relatedComponentSourceFiles =
+            buildRelatedComponentSourceFilesForGeneration(
+              componentSourceFiles,
+              relatedComponents,
+            );
+          const componentGenerationInput = buildComponentGenerationStageInput({
+            componentDescription: request.componentDescription,
+            designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
+            e2eTests:
+              targetComponent.statePolicy === COMPONENT_STATE_POLICY.SMART
+                ? artifactsWithValidation.e2eTests
+                : null,
+            framework: COMPONENT_GENERATION_DEFAULT_FRAMEWORK,
+            gapAnalysis: gapAnalysisResult.output,
+            parsing: parsingResult.output,
+            projectRootPath,
+            relatedComponentInterfaces,
+            relatedComponentSourceFiles,
+            resolvingGaps: resolvingGapsResult.output,
+            targetComponent,
+            targetComponentInterface,
+            targetSourceFilePath,
+            targetUnitTests,
+            testFramework: COMPONENT_GENERATION_DEFAULT_TEST_FRAMEWORK,
+            validationFeedback: buildValidationFeedbackForComponent(
+              validationResult.output.regenerationReasons,
+              targetComponent.code,
+            ),
+            userFlows: userFlowsResult.output,
+          });
+          const componentGenerationResult =
+            await this.runComponentGenerationStage(componentGenerationInput);
+
+          artifactsWithValidation = buildArtifactsWithGeneratedComponent(
+            artifactsWithValidation,
+            COMPONENT_GENERATION_DEFAULT_FRAMEWORK,
+            componentGenerationResult.output,
+          );
+          stepsWithValidation = appendStepReport(
+            stepsWithValidation,
+            buildComponentGenerationStepReport(
+              componentGenerationInput,
+              componentGenerationResult.attempts,
+              componentGenerationResult.output,
+              componentGenerationResult.rawOutput,
+              stepsWithValidation.length + 1,
+              buildRunStepTokenUsage(componentGenerationResult.tokenUsage),
+            ),
+          );
+
+          await this.saveRunProgress(
+            runId,
+            artifactsWithValidation,
+            parsingDerivedData,
+            stepsWithValidation,
+          );
+        }
       }
 
       await this.markRunAsCompleted(runId);
@@ -562,6 +727,12 @@ export class RunOrchestratorUseCase {
     input: IComponentGenerationStepInput,
   ): ReturnType<RunComponentGenerationStepUseCase['execute']> {
     return this.runComponentGenerationStepUseCase.execute(input);
+  }
+
+  private async runValidationStage(
+    input: IRunValidationStepUseCaseRequest,
+  ): ReturnType<RunValidationStepUseCase['execute']> {
+    return this.runValidationStepUseCase.execute(input);
   }
 
   private async saveRunProgress(

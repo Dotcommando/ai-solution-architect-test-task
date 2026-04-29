@@ -1,5 +1,9 @@
 import type { AnySchemaObject } from 'ajv';
 import { IComponentInterfacesStepOutput } from '../../component-interfaces/types';
+import {
+  DESIGN_SYSTEM_CONTEXT_SCHEMA,
+  IDesignSystemContext,
+} from '../../design-system/types';
 import { IE2eTestsStepOutput } from '../../e2e-tests/types';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
 import { IResolvingGapsStepOutput } from '../../resolving-gaps/types';
@@ -22,8 +26,13 @@ export interface IGeneratedCodeFile {
   filename: string;
 }
 
+export interface IComponentGenerationValidationFeedback {
+  reasons: string[];
+}
+
 export interface IComponentGenerationStepInput {
   componentDescription: string;
+  designSystemContext: IDesignSystemContext;
   e2eTests: IE2eTestsStepOutput | null;
   framework: string;
   gapAnalysis: IGapAnalysisStepOutput;
@@ -37,6 +46,7 @@ export interface IComponentGenerationStepInput {
   targetSourceFilePath: string;
   targetUnitTests: IUnitTestsStepOutput;
   testFramework: string;
+  validationFeedback: IComponentGenerationValidationFeedback | null;
   userFlows: IUserFlowsStepOutput;
 }
 
@@ -50,6 +60,7 @@ export interface IComponentGenerationStepOutput {
 
 export interface IRunComponentGenerationStepUseCaseRequest {
   componentDescription: string;
+  designSystemContext: IDesignSystemContext;
   e2eTests: IE2eTestsStepOutput | null;
   framework: string;
   gapAnalysis: IGapAnalysisStepOutput;
@@ -63,6 +74,7 @@ export interface IRunComponentGenerationStepUseCaseRequest {
   targetSourceFilePath: string;
   targetUnitTests: IUnitTestsStepOutput;
   testFramework: string;
+  validationFeedback: IComponentGenerationValidationFeedback | null;
   userFlows: IUserFlowsStepOutput;
 }
 
@@ -338,6 +350,7 @@ export const COMPONENT_GENERATION_STEP_INPUT_SCHEMA: AnySchemaObject = {
       minLength: 1,
       type: 'string',
     },
+    designSystemContext: DESIGN_SYSTEM_CONTEXT_SCHEMA,
     e2eTests: {
       anyOf: [
         {
@@ -525,6 +538,28 @@ export const COMPONENT_GENERATION_STEP_INPUT_SCHEMA: AnySchemaObject = {
       minLength: 1,
       type: 'string',
     },
+    validationFeedback: {
+      anyOf: [
+        {
+          additionalProperties: false,
+          properties: {
+            reasons: {
+              items: {
+                minLength: 1,
+                type: 'string',
+              },
+              minItems: 1,
+              type: 'array',
+            },
+          },
+          required: ['reasons'],
+          type: 'object',
+        },
+        {
+          type: 'null',
+        },
+      ],
+    },
     userFlows: {
       additionalProperties: false,
       properties: {
@@ -542,6 +577,7 @@ export const COMPONENT_GENERATION_STEP_INPUT_SCHEMA: AnySchemaObject = {
   },
   required: [
     'componentDescription',
+    'designSystemContext',
     'e2eTests',
     'framework',
     'gapAnalysis',
@@ -555,6 +591,7 @@ export const COMPONENT_GENERATION_STEP_INPUT_SCHEMA: AnySchemaObject = {
     'targetSourceFilePath',
     'targetUnitTests',
     'testFramework',
+    'validationFeedback',
     'userFlows',
   ],
   type: 'object',

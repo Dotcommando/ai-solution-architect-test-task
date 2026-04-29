@@ -59,6 +59,7 @@ export class RunComponentGenerationStepUseCase {
   ): IComponentGenerationStepInput {
     return {
       componentDescription: request.componentDescription,
+      designSystemContext: request.designSystemContext,
       e2eTests: request.e2eTests,
       framework: request.framework,
       gapAnalysis: request.gapAnalysis,
@@ -72,6 +73,7 @@ export class RunComponentGenerationStepUseCase {
       targetSourceFilePath: request.targetSourceFilePath,
       targetUnitTests: request.targetUnitTests,
       testFramework: request.testFramework,
+      validationFeedback: request.validationFeedback,
       userFlows: request.userFlows,
     };
   }

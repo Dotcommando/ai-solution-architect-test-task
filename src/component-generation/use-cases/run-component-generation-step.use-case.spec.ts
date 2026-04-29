@@ -1,4 +1,5 @@
 import { IComponentInterfacesStepOutput } from '../../component-interfaces/types';
+import { DEFAULT_DESIGN_SYSTEM_CONTEXT } from '../../design-system/constants';
 import { IE2eTestsStepOutput } from '../../e2e-tests/types';
 import { IGapAnalysisStepOutput } from '../../gap-analysis/types';
 import { PromptRepository } from '../../prompt/repositories/prompt.repository';
@@ -294,6 +295,7 @@ describe('RunComponentGenerationStepUseCase', () => {
     await expect(
       useCase.execute({
         componentDescription: 'Payment card component.',
+        designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
         e2eTests: createE2eTestsOutput(),
         framework: 'React',
         gapAnalysis: createGapAnalysisOutput(),
@@ -308,6 +310,7 @@ describe('RunComponentGenerationStepUseCase', () => {
           '/workspace/generated/frontend/src/components/PaymentCard/PaymentCard.tsx',
         targetUnitTests: createTargetUnitTests(),
         testFramework: 'Jest + React Testing Library',
+        validationFeedback: null,
         userFlows: createUserFlowsOutput(),
       }),
     ).resolves.toEqual(executionResult);
@@ -322,6 +325,7 @@ describe('RunComponentGenerationStepUseCase', () => {
     expect(stepExecutorService.execute).toHaveBeenCalledWith({
       input: {
         componentDescription: 'Payment card component.',
+        designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
         e2eTests: createE2eTestsOutput(),
         framework: 'React',
         gapAnalysis: createGapAnalysisOutput(),
@@ -336,6 +340,7 @@ describe('RunComponentGenerationStepUseCase', () => {
           '/workspace/generated/frontend/src/components/PaymentCard/PaymentCard.tsx',
         targetUnitTests: createTargetUnitTests(),
         testFramework: 'Jest + React Testing Library',
+        validationFeedback: null,
         userFlows: createUserFlowsOutput(),
       },
       prompt,
