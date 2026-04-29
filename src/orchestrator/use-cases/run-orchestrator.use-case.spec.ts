@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { join } from 'node:path';
+import { DEFAULT_CANONICAL_STATE_MODEL } from '../../canonical-state-model/constants';
 import { RunComponentGenerationStepUseCase } from '../../component-generation/use-cases/run-component-generation-step.use-case';
 import { RunComponentInterfacesStepUseCase } from '../../component-interfaces/use-cases/run-component-interfaces-step.use-case';
 import { DEFAULT_DESIGN_SYSTEM_CONTEXT } from '../../design-system/constants';
@@ -894,6 +895,7 @@ describe('RunOrchestratorUseCase', () => {
     expect(runComponentGenerationStepUseCase.execute).toHaveBeenNthCalledWith(
       1,
       {
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         componentDescription: 'Payment card component.',
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
         e2eTests: null,
@@ -946,6 +948,7 @@ describe('RunOrchestratorUseCase', () => {
     expect(runComponentGenerationStepUseCase.execute).toHaveBeenNthCalledWith(
       2,
       {
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         componentDescription: 'Payment card component.',
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
         e2eTests: expect.objectContaining({
@@ -1014,6 +1017,7 @@ describe('RunOrchestratorUseCase', () => {
       },
     );
     expect(runValidationStepUseCase.execute).toHaveBeenCalledWith({
+      canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
       componentDescription: 'Payment card component.',
       componentInterfaces: {
         components: [
@@ -2124,6 +2128,7 @@ describe('RunOrchestratorUseCase', () => {
     expect(runComponentGenerationStepUseCase.execute).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
         targetComponent: expect.objectContaining({
           code: 'payment_card',
@@ -2147,6 +2152,7 @@ describe('RunOrchestratorUseCase', () => {
     expect(runValidationStepUseCase.execute).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         generatedCode: expect.objectContaining({
           components: [
             expect.objectContaining({

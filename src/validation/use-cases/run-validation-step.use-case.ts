@@ -53,6 +53,7 @@ export class RunValidationStepUseCase {
       step,
     });
     const deterministicIssues = buildDeterministicValidationIssues(
+      request.canonicalStateModel,
       input.deterministicSummary.detectedHallucinations,
       {
         coveredCount: input.deterministicSummary.stateCoverage.coveredCount,
@@ -64,6 +65,7 @@ export class RunValidationStepUseCase {
       },
     );
     const regenerationReasons = buildRegenerationReasons(
+      request.canonicalStateModel,
       request.designSystemContext,
       request.parsing,
       request.resolvingGaps,
@@ -112,6 +114,7 @@ export class RunValidationStepUseCase {
       request.generatedCode,
     );
     const stateCoverageSummary = buildStateCoverageSummary(
+      request.canonicalStateModel,
       request.parsing,
       request.gapAnalysis,
       request.resolvingGaps,
@@ -121,6 +124,7 @@ export class RunValidationStepUseCase {
     );
 
     return {
+      canonicalStateModel: request.canonicalStateModel,
       componentDescription: request.componentDescription,
       componentInterfaces: request.componentInterfaces,
       designSystemContext: request.designSystemContext,

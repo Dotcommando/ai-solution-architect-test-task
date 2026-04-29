@@ -1,4 +1,8 @@
 import type { AnySchemaObject } from 'ajv';
+import {
+  CANONICAL_STATE_MODEL_SCHEMA,
+  ICanonicalStateModel,
+} from '../../canonical-state-model/types';
 import { IComponentInterfacesStepOutput } from '../../component-interfaces/types';
 import {
   DESIGN_SYSTEM_CONTEXT_SCHEMA,
@@ -35,6 +39,7 @@ export interface IValidationRegenerationReason {
 }
 
 export interface IValidationStepInput {
+  canonicalStateModel: ICanonicalStateModel;
   componentDescription: string;
   componentInterfaces: {
     components: IComponentInterfacesStepOutput[];
@@ -65,6 +70,7 @@ export interface IValidationStepOutput {
 }
 
 export interface IRunValidationStepUseCaseRequest {
+  canonicalStateModel: ICanonicalStateModel;
   componentDescription: string;
   componentInterfaces: {
     components: IComponentInterfacesStepOutput[];
@@ -92,6 +98,7 @@ export const VALIDATION_STEP_INPUT_SCHEMA: AnySchemaObject = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   additionalProperties: false,
   properties: {
+    canonicalStateModel: CANONICAL_STATE_MODEL_SCHEMA,
     componentDescription: {
       minLength: 1,
       type: 'string',
@@ -285,6 +292,7 @@ export const VALIDATION_STEP_INPUT_SCHEMA: AnySchemaObject = {
     },
   },
   required: [
+    'canonicalStateModel',
     'componentDescription',
     'componentInterfaces',
     'designSystemContext',

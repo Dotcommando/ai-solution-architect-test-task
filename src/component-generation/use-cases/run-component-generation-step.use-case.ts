@@ -58,6 +58,7 @@ export class RunComponentGenerationStepUseCase {
     request: IRunComponentGenerationStepUseCaseRequest,
   ): IComponentGenerationStepInput {
     return {
+      canonicalStateModel: request.canonicalStateModel,
       componentDescription: request.componentDescription,
       designSystemContext: request.designSystemContext,
       e2eTests: request.e2eTests,

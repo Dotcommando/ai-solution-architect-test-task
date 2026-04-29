@@ -1,3 +1,4 @@
+import { DEFAULT_CANONICAL_STATE_MODEL } from '../../canonical-state-model/constants';
 import { IComponentInterfacesStepOutput } from '../../component-interfaces/types';
 import { DEFAULT_DESIGN_SYSTEM_CONTEXT } from '../../design-system/constants';
 import { IE2eTestsStepOutput } from '../../e2e-tests/types';
@@ -316,6 +317,7 @@ describe('RunValidationStepUseCase', () => {
 
     await expect(
       useCase.execute({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         componentDescription: 'Payment card component.',
         componentInterfaces: createComponentInterfaces(),
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
@@ -373,6 +375,7 @@ describe('RunValidationStepUseCase', () => {
     expect(executeCall).toBeDefined();
     expect(executeCall.input).toEqual(
       expect.objectContaining({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         componentDescription: 'Payment card component.',
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
         deterministicSummary: {
@@ -424,6 +427,7 @@ describe('RunValidationStepUseCase', () => {
 
     await expect(
       useCase.execute({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         componentDescription: 'Payment card component.',
         componentInterfaces: createComponentInterfaces(),
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
@@ -548,6 +552,7 @@ describe('RunValidationStepUseCase', () => {
 
     await expect(
       useCase.execute({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         componentDescription: 'Payment card component.',
         componentInterfaces: createComponentInterfaces(),
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
@@ -658,6 +663,7 @@ describe('RunValidationStepUseCase', () => {
 
     await expect(
       useCase.execute({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         componentDescription: 'Payment card component.',
         componentInterfaces: createComponentInterfaces(),
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
@@ -705,6 +711,337 @@ describe('RunValidationStepUseCase', () => {
           coveredCount: 0,
           label: '0/1',
           totalCount: 1,
+        },
+        tokenCompliance: true,
+      },
+      rawOutput: '{"tokenCompliance":true}',
+      tokenUsage: executionResult.tokenUsage,
+    });
+  });
+
+  it('does not request regeneration when loading is covered by deleting and in-progress states', async () => {
+    const promptRepository = createPromptRepositoryMock();
+    const stepRepository = createStepRepositoryMock();
+    const stepExecutorService = createStepExecutorServiceMock();
+    const step = createStep();
+    const prompt = createPrompt();
+    const executionResult = createExecutionResult();
+
+    stepRepository.findActiveByCode = jest.fn().mockResolvedValue(step);
+    promptRepository.findActiveByCodeAndVariant = jest
+      .fn()
+      .mockResolvedValue(prompt);
+    stepExecutorService.execute = jest
+      .fn<
+        Promise<IStepExecutionResult<IValidationStepOutput>>,
+        [IValidationStepExecutorRequest]
+      >()
+      .mockResolvedValue({
+        ...executionResult,
+        output: {
+          ...executionResult.output,
+          issuesFound: ['Focus restore could be more robust.'],
+        },
+      });
+
+    const useCase = new RunValidationStepUseCase(
+      stepRepository as StepRepository,
+      promptRepository as PromptRepository,
+      stepExecutorService as StepExecutorService,
+    );
+
+    await expect(
+      useCase.execute({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
+        componentDescription: 'Payment card component.',
+        componentInterfaces: createComponentInterfaces(),
+        designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
+        e2eTests: null,
+        generatedCode: {
+          ...createGeneratedCode(),
+          components: [
+            {
+              ...createGeneratedCode().components[0],
+              componentCode: 'payment_card',
+              statesCovered: ['deleting in progress'],
+            },
+            {
+              componentCode: 'delete_card_action',
+              files: [
+                {
+                  content:
+                    'export function DeleteCardAction() { return null; }',
+                  filename:
+                    '/workspace/generated/frontend/src/components/DeleteCardAction/DeleteCardAction.tsx',
+                },
+              ],
+              statesCovered: ['deleting (is_deleting=true)'],
+              tokensUsed: ['--color-text-primary'],
+            },
+          ],
+          files: [
+            {
+              content:
+                'export function PaymentCard() { return <div style={{ color: "var(--color-text-primary)" }} />; }',
+              filename:
+                '/workspace/generated/frontend/src/components/PaymentCard/PaymentCard.tsx',
+            },
+            {
+              content: 'export function DeleteCardAction() { return null; }',
+              filename:
+                '/workspace/generated/frontend/src/components/DeleteCardAction/DeleteCardAction.tsx',
+            },
+          ],
+          statesCovered: [
+            'deleting in progress',
+            'deleting (is_deleting=true)',
+          ],
+        },
+        gapAnalysis: {
+          ...createGapAnalysisOutput(),
+          missingStates: [
+            'Deletion in-progress state (loading/spinner, temporarily disable interactions)',
+          ],
+        },
+        parsing: {
+          ...createParsingOutput(),
+          specifiedStates: [],
+        },
+        resolvingGaps: {
+          decisions: [
+            {
+              affectedComponentCodes: ['delete_card_action', 'payment_card'],
+              code: 'deletion_async_in_progress_behavior',
+              decision:
+                'During deletion request: show an inline loading indicator on delete_card_action (spinner replacing the icon) and disable both payment_card selection and delete_card_action until the request resolves.',
+              rationale:
+                'This defines the in-progress state behavior for async deletion.',
+              sourceGap:
+                'Deletion in-progress state (loading/spinner, temporarily disable interactions)',
+            },
+          ],
+        },
+        unitTests: {
+          components: [],
+        },
+        userFlows: createUserFlowsOutput(),
+      }),
+    ).resolves.toEqual({
+      attempts: 1,
+      output: {
+        accessibilityScore: 'needs_attention',
+        affectedComponentCodes: [],
+        contractCompatibilityIssues: [],
+        hallucinationsCaught: [],
+        isRegenerationRequired: false,
+        issuesFound: ['Focus restore could be more robust.'],
+        regenerationReasons: [],
+        stateCoverage: {
+          coveredCount: 1,
+          label: '1/1',
+          totalCount: 1,
+        },
+        tokenCompliance: true,
+      },
+      rawOutput: '{"tokenCompliance":true}',
+      tokenUsage: executionResult.tokenUsage,
+    });
+  });
+
+  it('does not request regeneration when success is covered by deleted state handling', async () => {
+    const promptRepository = createPromptRepositoryMock();
+    const stepRepository = createStepRepositoryMock();
+    const stepExecutorService = createStepExecutorServiceMock();
+    const step = createStep();
+    const prompt = createPrompt();
+    const executionResult = createExecutionResult();
+
+    stepRepository.findActiveByCode = jest.fn().mockResolvedValue(step);
+    promptRepository.findActiveByCodeAndVariant = jest
+      .fn()
+      .mockResolvedValue(prompt);
+    stepExecutorService.execute = jest
+      .fn<
+        Promise<IStepExecutionResult<IValidationStepOutput>>,
+        [IValidationStepExecutorRequest]
+      >()
+      .mockResolvedValue({
+        ...executionResult,
+        output: {
+          ...executionResult.output,
+          issuesFound: [
+            'Focus handling after deletion could be more explicit.',
+          ],
+        },
+      });
+
+    const useCase = new RunValidationStepUseCase(
+      stepRepository as StepRepository,
+      promptRepository as PromptRepository,
+      stepExecutorService as StepExecutorService,
+    );
+
+    await expect(
+      useCase.execute({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
+        componentDescription: 'Payment card component.',
+        componentInterfaces: createComponentInterfaces(),
+        designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
+        e2eTests: null,
+        generatedCode: {
+          ...createGeneratedCode(),
+          components: [
+            {
+              ...createGeneratedCode().components[0],
+              componentCode: 'payment_card',
+              statesCovered: ['deleted=true', 'removed from list'],
+            },
+          ],
+          statesCovered: ['deleted=true', 'removed from list'],
+        },
+        gapAnalysis: {
+          ...createGapAnalysisOutput(),
+          missingStates: [
+            'Deletion success feedback/removed state handling (animation, toast, list update expectations)',
+          ],
+        },
+        parsing: {
+          ...createParsingOutput(),
+          specifiedStates: [],
+        },
+        resolvingGaps: {
+          decisions: [
+            {
+              affectedComponentCodes: ['delete_card_action', 'payment_card'],
+              code: 'delete_success_removal_handling',
+              decision:
+                'On successful deletion, the parent removes the payment_card from the list; the component itself does not animate removal. If the component remains mounted temporarily, it must render nothing when a controlled "deleted" flag is true.',
+              rationale:
+                'Clarify list-update ownership while preserving a deterministic deleted outcome.',
+              sourceGap:
+                'Deletion success feedback/removed state handling (animation, toast, list update expectations)',
+            },
+          ],
+        },
+        unitTests: {
+          components: [],
+        },
+        userFlows: createUserFlowsOutput(),
+      }),
+    ).resolves.toEqual({
+      attempts: 1,
+      output: {
+        accessibilityScore: 'needs_attention',
+        affectedComponentCodes: [],
+        contractCompatibilityIssues: [],
+        hallucinationsCaught: [],
+        isRegenerationRequired: false,
+        issuesFound: ['Focus handling after deletion could be more explicit.'],
+        regenerationReasons: [],
+        stateCoverage: {
+          coveredCount: 1,
+          label: '1/1',
+          totalCount: 1,
+        },
+        tokenCompliance: true,
+      },
+      rawOutput: '{"tokenCompliance":true}',
+      tokenUsage: executionResult.tokenUsage,
+    });
+  });
+
+  it('does not request regeneration when failed is covered by delete error handling', async () => {
+    const promptRepository = createPromptRepositoryMock();
+    const stepRepository = createStepRepositoryMock();
+    const stepExecutorService = createStepExecutorServiceMock();
+    const step = createStep();
+    const prompt = createPrompt();
+    const executionResult = createExecutionResult();
+
+    stepRepository.findActiveByCode = jest.fn().mockResolvedValue(step);
+    promptRepository.findActiveByCodeAndVariant = jest
+      .fn()
+      .mockResolvedValue(prompt);
+    stepExecutorService.execute = jest
+      .fn<
+        Promise<IStepExecutionResult<IValidationStepOutput>>,
+        [IValidationStepExecutorRequest]
+      >()
+      .mockResolvedValue({
+        ...executionResult,
+        output: {
+          ...executionResult.output,
+          issuesFound: ['Backdrop close behavior could be clarified.'],
+        },
+      });
+
+    const useCase = new RunValidationStepUseCase(
+      stepRepository as StepRepository,
+      promptRepository as PromptRepository,
+      stepExecutorService as StepExecutorService,
+    );
+
+    await expect(
+      useCase.execute({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
+        componentDescription: 'Payment card component.',
+        componentInterfaces: createComponentInterfaces(),
+        designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
+        e2eTests: null,
+        generatedCode: {
+          ...createGeneratedCode(),
+          components: [
+            {
+              ...createGeneratedCode().components[0],
+              componentCode: 'payment_card',
+              statesCovered: ['delete error (delete_error_message present)'],
+            },
+          ],
+          statesCovered: ['delete error (delete_error_message present)'],
+        },
+        gapAnalysis: {
+          ...createGapAnalysisOutput(),
+          missingStates: [
+            'Delete error state (failed deletion messaging and recovery action)',
+          ],
+        },
+        parsing: {
+          ...createParsingOutput(),
+          specifiedStates: [],
+        },
+        resolvingGaps: {
+          decisions: [
+            {
+              affectedComponentCodes: ['delete_card_action', 'payment_card'],
+              code: 'delete_error_inline_recovery',
+              decision:
+                'On delete failure: keep the card visible and interactive again, render an inline error message beneath the card details, and keep the delete button available as a retry.',
+              rationale:
+                'Define the delete failure state and the local recovery path.',
+              sourceGap:
+                'Delete error state (failed deletion messaging and recovery action)',
+            },
+          ],
+        },
+        unitTests: {
+          components: [],
+        },
+        userFlows: createUserFlowsOutput(),
+      }),
+    ).resolves.toEqual({
+      attempts: 1,
+      output: {
+        accessibilityScore: 'needs_attention',
+        affectedComponentCodes: [],
+        contractCompatibilityIssues: [],
+        hallucinationsCaught: [],
+        isRegenerationRequired: false,
+        issuesFound: ['Backdrop close behavior could be clarified.'],
+        regenerationReasons: [],
+        stateCoverage: {
+          coveredCount: 2,
+          label: '2/2',
+          totalCount: 2,
         },
         tokenCompliance: true,
       },

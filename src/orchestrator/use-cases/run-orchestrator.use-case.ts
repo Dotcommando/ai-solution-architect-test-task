@@ -1,3 +1,4 @@
+import { DEFAULT_CANONICAL_STATE_MODEL } from '../../canonical-state-model/constants';
 import { Injectable } from '@nestjs/common';
 import {
   COMPONENT_GENERATION_DEFAULT_FRAMEWORK,
@@ -425,6 +426,7 @@ export class RunOrchestratorUseCase {
             relatedComponents,
           );
         const componentGenerationInput = buildComponentGenerationStageInput({
+          canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
           componentDescription: request.componentDescription,
           designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
           e2eTests:
@@ -489,6 +491,7 @@ export class RunOrchestratorUseCase {
         }
 
         const validationInput = buildValidationStageInput({
+          canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
           componentDescription: request.componentDescription,
           componentInterfaces,
           designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
@@ -575,6 +578,7 @@ export class RunOrchestratorUseCase {
               relatedComponents,
             );
           const componentGenerationInput = buildComponentGenerationStageInput({
+            canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
             componentDescription: request.componentDescription,
             designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
             e2eTests:

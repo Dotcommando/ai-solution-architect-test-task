@@ -1,3 +1,4 @@
+import { DEFAULT_CANONICAL_STATE_MODEL } from '../../canonical-state-model/constants';
 import { IComponentInterfacesStepOutput } from '../../component-interfaces/types';
 import { DEFAULT_DESIGN_SYSTEM_CONTEXT } from '../../design-system/constants';
 import { IE2eTestsStepOutput } from '../../e2e-tests/types';
@@ -294,6 +295,7 @@ describe('RunComponentGenerationStepUseCase', () => {
 
     await expect(
       useCase.execute({
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         componentDescription: 'Payment card component.',
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
         e2eTests: createE2eTestsOutput(),
@@ -324,6 +326,7 @@ describe('RunComponentGenerationStepUseCase', () => {
     );
     expect(stepExecutorService.execute).toHaveBeenCalledWith({
       input: {
+        canonicalStateModel: DEFAULT_CANONICAL_STATE_MODEL,
         componentDescription: 'Payment card component.',
         designSystemContext: DEFAULT_DESIGN_SYSTEM_CONTEXT,
         e2eTests: createE2eTestsOutput(),

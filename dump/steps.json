@@ -3492,9 +3492,83 @@
               "type": "null"
             }
           ]
+        },
+        "canonicalStateModel": {
+          "additionalProperties": false,
+          "properties": {
+            "states": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "active",
+                      "confirming",
+                      "default",
+                      "disabled",
+                      "empty",
+                      "error",
+                      "expired",
+                      "failed",
+                      "focus_visible",
+                      "hover",
+                      "invalid",
+                      "loading",
+                      "selected",
+                      "success",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "coveredAliases": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "description": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "requiredAliases": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "severity": {
+                    "enum": [
+                      "hard",
+                      "soft"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "coveredAliases",
+                  "description",
+                  "requiredAliases",
+                  "severity"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "states"
+          ],
+          "type": "object"
         }
       },
       "required": [
+        "canonicalStateModel",
         "componentDescription",
         "designSystemContext",
         "framework",
@@ -3827,9 +3901,83 @@
           "required": [
             "flows"
           ]
+        },
+        "canonicalStateModel": {
+          "additionalProperties": false,
+          "properties": {
+            "states": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "code": {
+                    "enum": [
+                      "active",
+                      "confirming",
+                      "default",
+                      "disabled",
+                      "empty",
+                      "error",
+                      "expired",
+                      "failed",
+                      "focus_visible",
+                      "hover",
+                      "invalid",
+                      "loading",
+                      "selected",
+                      "success",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  },
+                  "coveredAliases": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "description": {
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "requiredAliases": {
+                    "items": {
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  "severity": {
+                    "enum": [
+                      "hard",
+                      "soft"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code",
+                  "coveredAliases",
+                  "description",
+                  "requiredAliases",
+                  "severity"
+                ],
+                "type": "object"
+              },
+              "minItems": 1,
+              "type": "array"
+            }
+          },
+          "required": [
+            "states"
+          ],
+          "type": "object"
         }
       },
       "required": [
+        "canonicalStateModel",
         "componentDescription",
         "componentInterfaces",
         "designSystemContext",

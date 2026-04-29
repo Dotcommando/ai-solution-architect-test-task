@@ -1,4 +1,8 @@
 import type { AnySchemaObject } from 'ajv';
+import {
+  CANONICAL_STATE_MODEL_SCHEMA,
+  ICanonicalStateModel,
+} from '../../canonical-state-model/types';
 import { IComponentInterfacesStepOutput } from '../../component-interfaces/types';
 import {
   DESIGN_SYSTEM_CONTEXT_SCHEMA,
@@ -31,6 +35,7 @@ export interface IComponentGenerationValidationFeedback {
 }
 
 export interface IComponentGenerationStepInput {
+  canonicalStateModel: ICanonicalStateModel;
   componentDescription: string;
   designSystemContext: IDesignSystemContext;
   e2eTests: IE2eTestsStepOutput | null;
@@ -59,6 +64,7 @@ export interface IComponentGenerationStepOutput {
 }
 
 export interface IRunComponentGenerationStepUseCaseRequest {
+  canonicalStateModel: ICanonicalStateModel;
   componentDescription: string;
   designSystemContext: IDesignSystemContext;
   e2eTests: IE2eTestsStepOutput | null;
@@ -346,6 +352,7 @@ export const COMPONENT_GENERATION_STEP_INPUT_SCHEMA: AnySchemaObject = {
   },
   additionalProperties: false,
   properties: {
+    canonicalStateModel: CANONICAL_STATE_MODEL_SCHEMA,
     componentDescription: {
       minLength: 1,
       type: 'string',
@@ -576,6 +583,7 @@ export const COMPONENT_GENERATION_STEP_INPUT_SCHEMA: AnySchemaObject = {
     },
   },
   required: [
+    'canonicalStateModel',
     'componentDescription',
     'designSystemContext',
     'e2eTests',

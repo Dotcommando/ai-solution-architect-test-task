@@ -1,3 +1,10 @@
+import {
+  extractCoveredCanonicalStates,
+  extractRequiredCanonicalStates,
+  getHardBlockingCanonicalStates,
+  getSoftAdvisoryCanonicalStates,
+} from '../../canonical-state-model/utils';
+import { ICanonicalStateModel } from '../../canonical-state-model/types';
 import { IComponentInterfacesStepOutput } from '../../component-interfaces/types';
 import { IDesignSystemContext } from '../../design-system/types';
 import { IE2eTestsStepOutput } from '../../e2e-tests/types';
@@ -20,27 +27,6 @@ export interface IValidationStateCoverageSummary {
   totalCount: number;
 }
 
-const STATE_KEYWORDS = [
-  'approved',
-  'disabled',
-  'empty',
-  'error',
-  'failed',
-  'hover',
-  'invalid',
-  'loading',
-  'pending',
-  'rejected',
-  'selected',
-  'success',
-  'validation',
-];
-const SOFT_ADVISORY_STATES = ['hover'];
-const STRICT_TEXT_MATCH_STATES = ['invalid', 'validation'];
-const HARD_BLOCKING_STATES = STATE_KEYWORDS.filter((state) => {
-  return !SOFT_ADVISORY_STATES.includes(state);
-});
-
 export function buildDetectedHallucinations(
   designSystemContext: IDesignSystemContext,
   generatedCode: IRunGeneratedCodeArtifact,
@@ -60,6 +46,7 @@ export function buildDetectedHallucinations(
 }
 
 export function buildStateCoverageSummary(
+  canonicalStateModel: ICanonicalStateModel,
   parsing: IParsingStepOutput,
   gapAnalysis: IGapAnalysisStepOutput,
   resolvingGaps: IResolvingGapsStepOutput,
@@ -68,22 +55,38 @@ export function buildStateCoverageSummary(
   e2eTests: IE2eTestsStepOutput | null,
 ): IValidationStateCoverageSummary {
   const requiredStates = deduplicateStrings([
-    ...parsing.specifiedStates.map((state) => {
-      return normalizeStateName(state.name);
-    }),
-    ...extractRequiredStateNamesFromStrings(gapAnalysis.missingStates),
-    ...extractRequiredStateNamesFromStrings(
+    ...extractRequiredCanonicalStates(
+      canonicalStateModel,
+      parsing.specifiedStates.map((state) => {
+        return state.name;
+      }),
+    ),
+    ...extractRequiredCanonicalStates(
+      canonicalStateModel,
+      gapAnalysis.missingStates,
+    ),
+    ...extractRequiredCanonicalStates(
+      canonicalStateModel,
       resolvingGaps.decisions.flatMap((decision) => {
         return [decision.decision, decision.sourceGap];
       }),
     ),
   ]);
   const coveredStates = deduplicateStrings([
-    ...buildNormalizedCoveredStates(generatedCode.statesCovered),
+    ...buildNormalizedCoveredStates(
+      canonicalStateModel,
+      generatedCode.statesCovered,
+    ),
     ...unitTests.components.flatMap((component) => {
-      return buildNormalizedCoveredStates(component.coveredStates);
+      return buildNormalizedCoveredStates(
+        canonicalStateModel,
+        component.coveredStates,
+      );
     }),
-    ...buildNormalizedCoveredStates(e2eTests?.coveredStates ?? []),
+    ...buildNormalizedCoveredStates(
+      canonicalStateModel,
+      e2eTests?.coveredStates ?? [],
+    ),
   ]);
   const missingStates = requiredStates.filter((state) => {
     return !coveredStates.includes(state);
@@ -102,12 +105,19 @@ export function buildStateCoverageSummary(
 }
 
 export function buildDeterministicValidationIssues(
+  canonicalStateModel: ICanonicalStateModel,
   hallucinations: string[],
   stateCoverage: IValidationStateCoverageSummary,
 ): string[] {
   const issues: string[] = [];
-  const missingHardStates = getHardBlockingStates(stateCoverage.missingStates);
-  const missingSoftStates = getSoftAdvisoryStates(stateCoverage.missingStates);
+  const missingHardStates = getHardBlockingCanonicalStates(
+    canonicalStateModel,
+    stateCoverage.missingStates,
+  );
+  const missingSoftStates = getSoftAdvisoryCanonicalStates(
+    canonicalStateModel,
+    stateCoverage.missingStates,
+  );
 
   if (hallucinations.length > 0) {
     issues.push(
@@ -133,6 +143,7 @@ export function buildTokenCompliance(hallucinations: string[]): boolean {
 }
 
 export function buildRegenerationReasons(
+  canonicalStateModel: ICanonicalStateModel,
   designSystemContext: IDesignSystemContext,
   parsing: IParsingStepOutput,
   resolvingGaps: IResolvingGapsStepOutput,
@@ -140,7 +151,10 @@ export function buildRegenerationReasons(
   stateCoverage: IValidationStateCoverageSummary,
 ): IValidationRegenerationReason[] {
   const issuesByComponent = new Map<string, Set<string>>();
-  const missingHardStates = getHardBlockingStates(stateCoverage.missingStates);
+  const missingHardStates = getHardBlockingCanonicalStates(
+    canonicalStateModel,
+    stateCoverage.missingStates,
+  );
   const stateCoverageIssue =
     missingHardStates.length > 0
       ? `Missing required states: ${missingHardStates.join(', ')}`
@@ -164,6 +178,7 @@ export function buildRegenerationReasons(
 
   if (stateCoverageIssue !== null) {
     for (const componentCode of findStateCoverageAffectedComponentCodes(
+      canonicalStateModel,
       parsing,
       resolvingGaps,
       missingHardStates,
@@ -235,6 +250,7 @@ function buildDetectedHallucinationsForComponent(
 }
 
 function findStateCoverageAffectedComponentCodes(
+  canonicalStateModel: ICanonicalStateModel,
   parsing: IParsingStepOutput,
   resolvingGaps: IResolvingGapsStepOutput,
   missingStates: string[],
@@ -242,24 +258,25 @@ function findStateCoverageAffectedComponentCodes(
   const affectedComponentCodes = new Set<string>();
 
   for (const state of parsing.specifiedStates) {
-    const normalizedStateName = normalizeStateName(state.name);
-
-    if (missingStates.includes(normalizedStateName)) {
+    if (
+      extractRequiredCanonicalStates(canonicalStateModel, [state.name]).some(
+        (requiredState) => {
+          return missingStates.includes(requiredState);
+        },
+      )
+    ) {
       affectedComponentCodes.add(state.componentCode);
     }
   }
 
   for (const decision of resolvingGaps.decisions) {
-    const candidateValues = [decision.decision, decision.sourceGap].map(
-      normalizeStateName,
+    const candidateStates = extractRequiredCanonicalStates(
+      canonicalStateModel,
+      [decision.decision, decision.sourceGap],
     );
 
     for (const missingState of missingStates) {
-      if (
-        candidateValues.some((candidateValue) => {
-          return candidateValue.includes(missingState);
-        })
-      ) {
+      if (candidateStates.includes(missingState)) {
         for (const componentCode of decision.affectedComponentCodes) {
           affectedComponentCodes.add(componentCode);
         }
@@ -274,100 +291,12 @@ function findStateCoverageAffectedComponentCodes(
   return Array.from(affectedComponentCodes).sort();
 }
 
-function extractStateNamesFromStrings(values: string[]): string[] {
-  const extractedStates = new Set<string>();
-
-  for (const value of values) {
-    const normalizedValue = normalizeStateName(value);
-    const stateMatch = normalizedValue.match(
-      /([a-z0-9_]+)(?:_state|_states)?(?:_is|_are|_was|_were|_not|$)/,
-    );
-
-    if (stateMatch !== null) {
-      const stateName = stateMatch[1];
-
-      if (stateName !== undefined && STATE_KEYWORDS.includes(stateName)) {
-        extractedStates.add(stateName);
-      }
-    }
-
-    for (const keyword of STATE_KEYWORDS) {
-      if (normalizedValue.includes(keyword)) {
-        extractedStates.add(keyword);
-      }
-    }
-  }
-
-  return Array.from(extractedStates);
-}
-
-function extractRequiredStateNamesFromStrings(values: string[]): string[] {
-  const extractedStates = new Set<string>();
-
-  for (const value of values) {
-    const normalizedValue = normalizeStateName(value);
-
-    for (const match of normalizedValue.matchAll(
-      /(?:^|_)([a-z0-9_]+?)(?:_state|_states)(?:_|$)/g,
-    )) {
-      const stateName = match[1];
-
-      if (stateName !== undefined && STATE_KEYWORDS.includes(stateName)) {
-        extractedStates.add(stateName);
-      }
-    }
-
-    for (const keyword of STATE_KEYWORDS) {
-      if (
-        STRICT_TEXT_MATCH_STATES.includes(keyword) &&
-        !matchesStrictStateReference(normalizedValue, keyword)
-      ) {
-        continue;
-      }
-
-      if (normalizedValue.includes(keyword)) {
-        extractedStates.add(keyword);
-      }
-    }
-  }
-
-  return Array.from(extractedStates);
-}
-
-function buildNormalizedCoveredStates(values: string[]): string[] {
-  return deduplicateStrings([
-    ...values.map(normalizeStateName),
-    ...extractStateNamesFromStrings(values),
-  ]);
-}
-
-function normalizeStateName(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .replace(/_state$/, '');
-}
-
-function getHardBlockingStates(states: string[]): string[] {
-  return states.filter((state) => {
-    return HARD_BLOCKING_STATES.includes(state);
-  });
-}
-
-function getSoftAdvisoryStates(states: string[]): string[] {
-  return states.filter((state) => {
-    return SOFT_ADVISORY_STATES.includes(state);
-  });
-}
-
-function matchesStrictStateReference(
-  normalizedValue: string,
-  stateName: string,
-): boolean {
-  return new RegExp(`(?:^|_)${stateName}(?:_state|_states|$)`).test(
-    normalizedValue,
+function buildNormalizedCoveredStates(
+  canonicalStateModel: ICanonicalStateModel,
+  values: string[],
+): string[] {
+  return deduplicateStrings(
+    extractCoveredCanonicalStates(canonicalStateModel, values),
   );
 }
 
