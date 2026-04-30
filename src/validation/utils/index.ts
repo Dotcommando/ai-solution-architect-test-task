@@ -366,6 +366,12 @@ function buildRequiredStates(
   gapAnalysis: IGapAnalysisStepOutput,
   resolvingGaps: IResolvingGapsStepOutput,
 ): string[] {
+  const inferredSourceTexts = [
+    ...gapAnalysis.missingStates,
+    ...resolvingGaps.decisions.flatMap((decision) => {
+      return [decision.decision, decision.sourceGap];
+    }),
+  ];
   const explicitRequiredStates = deduplicateStrings(
     extractCoveredCanonicalStates(
       canonicalStateModel,
@@ -391,6 +397,7 @@ function buildRequiredStates(
     ...explicitRequiredStates,
     ...inferredRequiredStates.filter((state) => {
       return shouldTreatInferredStateAsRequired(
+        inferredSourceTexts,
         parsing,
         explicitRequiredStates,
         state,
@@ -450,6 +457,7 @@ function escapeRegExp(value: string): string {
 }
 
 function shouldTreatInferredStateAsRequired(
+  inferredSourceTexts: string[],
   parsing: IParsingStepOutput,
   explicitRequiredStates: string[],
   state: string,
@@ -467,18 +475,37 @@ function shouldTreatInferredStateAsRequired(
   if (state === 'confirming') {
     return (
       parsing.interactions.some((interaction) => {
-        return (
-          interaction.type === COMPONENT_INTERACTION_TYPE.DELETE ||
-          interaction.type === COMPONENT_INTERACTION_TYPE.PICK_FILE
-        );
+        return interaction.type === COMPONENT_INTERACTION_TYPE.DELETE;
+      }) ||
+      inferredSourceTexts.some((value) => {
+        return hasStrongConfirmingSignal(value);
       }) ||
       parsing.components.some((component) => {
-        return canComponentOwnCanonicalState(component, state);
+        return component.type === UI_COMPONENT_TYPE.MODAL;
       })
     );
   }
 
   return true;
+}
+
+function hasStrongConfirmingSignal(value: string): boolean {
+  const normalizedValue = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ');
+
+  return [
+    'confirm dialog',
+    'confirmation dialog',
+    'modal dialog',
+    'alertdialog',
+    'popover',
+    'delete confirmation',
+    'replace confirmation',
+  ].some((signal) => {
+    return normalizedValue.includes(signal);
+  });
 }
 
 function findParsedComponent(
@@ -511,10 +538,8 @@ function canComponentOwnCanonicalState(
     case 'confirming':
       return [
         UI_COMPONENT_TYPE.ACTION,
-        UI_COMPONENT_TYPE.BUTTON,
         UI_COMPONENT_TYPE.CARD,
         UI_COMPONENT_TYPE.FILE_UPLOAD,
-        UI_COMPONENT_TYPE.FORM,
         UI_COMPONENT_TYPE.MODAL,
         UI_COMPONENT_TYPE.PAGE,
         UI_COMPONENT_TYPE.WIZARD,

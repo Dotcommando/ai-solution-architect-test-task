@@ -313,6 +313,163 @@ describe('validation utils', () => {
     ).toEqual([]);
   });
 
+  it('does not infer confirming from a confirmation checkbox acknowledgement', () => {
+    const parsing: IParsingStepOutput = {
+      businessContext: 'KYC onboarding',
+      components: [
+        {
+          code: 'kyc_verification_wizard',
+          name: 'KYC verification wizard',
+          parentCode: null,
+          purpose: 'Coordinate the KYC verification flow.',
+          statePolicy: COMPONENT_STATE_POLICY.SMART,
+          type: UI_COMPONENT_TYPE.WIZARD,
+        },
+        {
+          code: 'personal_info_step',
+          name: 'Personal info step',
+          parentCode: 'kyc_verification_wizard',
+          purpose: 'Collect personal information.',
+          statePolicy: COMPONENT_STATE_POLICY.DUMB,
+          type: UI_COMPONENT_TYPE.FORM,
+        },
+        {
+          code: 'next_button',
+          name: 'Next button',
+          parentCode: 'kyc_verification_wizard',
+          purpose: 'Advance to the next step.',
+          statePolicy: COMPONENT_STATE_POLICY.DUMB,
+          type: UI_COMPONENT_TYPE.BUTTON,
+        },
+        {
+          code: 'document_upload',
+          name: 'Document upload',
+          parentCode: 'kyc_verification_wizard',
+          purpose: 'Upload documents.',
+          statePolicy: COMPONENT_STATE_POLICY.SMART,
+          type: UI_COMPONENT_TYPE.FILE_UPLOAD,
+        },
+      ],
+      constraints: [],
+      content: [],
+      interactions: [
+        {
+          code: 'pick_identity_document',
+          componentCode: 'document_upload',
+          description: 'Pick a document file to upload.',
+          targetComponentCode: null,
+          type: COMPONENT_INTERACTION_TYPE.PICK_FILE,
+        },
+      ],
+      rootComponentCode: 'kyc_verification_wizard',
+      specifiedStates: [],
+      tokenReferences: [],
+    };
+    const gapAnalysis: IGapAnalysisStepOutput = {
+      accessibilityGaps: [],
+      missingStates: [],
+      recommendations: [],
+      responsiveGaps: [],
+    };
+    const resolvingGaps: IResolvingGapsStepOutput = {
+      decisions: [
+        {
+          affectedComponentCodes: [
+            'kyc_verification_wizard',
+            'personal_info_step',
+            'next_button',
+          ],
+          code: 'personal_info_min_validation',
+          decision:
+            'Require a confirmation checkbox labeled "I confirm the above information is correct" before proceeding.',
+          rationale: 'The flow needs explicit acknowledgment.',
+          sourceGap:
+            'The brief does not specify how the user acknowledges the personal data review.',
+        },
+      ],
+    };
+    const generatedCode: IRunGeneratedCodeArtifact = {
+      components: [
+        {
+          componentCode: 'kyc_verification_wizard',
+          files: [
+            {
+              content:
+                'export default function KycVerificationWizard() { return null; }',
+              filename:
+                '/workspace/generated/frontend/src/components/KycVerificationWizard/KycVerificationWizard.tsx',
+            },
+          ],
+          statesCovered: ['default'],
+          tokensUsed: ['--color-text-primary'],
+        },
+        {
+          componentCode: 'personal_info_step',
+          files: [
+            {
+              content:
+                'export default function PersonalInfoStep() { return null; }',
+              filename:
+                '/workspace/generated/frontend/src/components/PersonalInfoStep/PersonalInfoStep.tsx',
+            },
+          ],
+          statesCovered: ['default'],
+          tokensUsed: ['--color-text-primary'],
+        },
+        {
+          componentCode: 'next_button',
+          files: [
+            {
+              content: 'export default function NextButton() { return null; }',
+              filename:
+                '/workspace/generated/frontend/src/components/NextButton/NextButton.tsx',
+            },
+          ],
+          statesCovered: ['default'],
+          tokensUsed: ['--color-text-primary'],
+        },
+        {
+          componentCode: 'document_upload',
+          files: [
+            {
+              content:
+                'export default function DocumentUpload() { return null; }',
+              filename:
+                '/workspace/generated/frontend/src/components/DocumentUpload/DocumentUpload.tsx',
+            },
+          ],
+          statesCovered: ['default'],
+          tokensUsed: ['--color-text-primary'],
+        },
+      ],
+      files: [],
+      framework: 'React',
+      statesCovered: ['default'],
+      tokensUsed: ['--color-text-primary'],
+    };
+
+    const stateCoverage = buildStateCoverageSummary(
+      DEFAULT_CANONICAL_STATE_MODEL,
+      parsing,
+      gapAnalysis,
+      resolvingGaps,
+      generatedCode,
+    );
+
+    expect(stateCoverage.requiredStates).toEqual([]);
+    expect(stateCoverage.missingStates).toEqual([]);
+    expect(
+      buildRegenerationReasons(
+        DEFAULT_CANONICAL_STATE_MODEL,
+        DEFAULT_DESIGN_SYSTEM_CONTEXT,
+        parsing,
+        resolvingGaps,
+        generatedCode,
+        stateCoverage,
+      ),
+    ).toEqual([]);
+  });
+
   it('does not infer active from the word interactive', () => {
     const parsing: IParsingStepOutput = {
       businessContext: 'merchant dashboard',

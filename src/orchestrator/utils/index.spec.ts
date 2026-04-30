@@ -126,4 +126,103 @@ describe('buildRunResult', () => {
       },
     });
   });
+
+  it('supports wizard root components in the final result shape', () => {
+    const artifacts: IRunArtifacts = {
+      componentInterfaces: {
+        components: [],
+      },
+      e2eTests: null,
+      gapAnalysis: {
+        accessibilityGaps: [],
+        missingStates: [],
+        recommendations: [],
+        responsiveGaps: [],
+      },
+      generatedCode: {
+        components: [],
+        files: [],
+        framework: 'React',
+        statesCovered: ['default'],
+        tokensUsed: [],
+      },
+      parsing: {
+        businessContext: 'KYC onboarding',
+        components: [],
+        constraints: [],
+        content: [],
+        interactions: [],
+        rootComponentCode: 'kyc_verification_wizard',
+        specifiedStates: [],
+        tokenReferences: [],
+      },
+      resolvingGaps: {
+        decisions: [],
+      },
+      unitTests: {
+        components: [],
+      },
+      userFlows: {
+        flows: [],
+      },
+      validation: {
+        accessibilityScore: 'partial_pass',
+        affectedComponentCodes: [],
+        contractCompatibilityIssues: [],
+        hallucinationsCaught: [],
+        isRegenerationRequired: false,
+        issuesFound: [],
+        regenerationReasons: [],
+        stateCoverage: {
+          coveredCount: 1,
+          label: '1/1',
+          totalCount: 1,
+        },
+        tokenCompliance: true,
+      },
+    };
+    const derivedData: IRunDerivedData = {
+      constraintDescriptions: [],
+      extractionConstraints: [],
+      extractionSpecifiedStates: [],
+      extractionTokenReferences: [],
+      referencedTokenNames: [],
+      rootComponent: null,
+      rootComponentName: 'KYC verification wizard',
+      rootComponentType: RUN_FINAL_COMPONENT_TYPE.WIZARD,
+      specifiedStateNames: [],
+    };
+
+    expect(buildRunResult(artifacts, derivedData)).toEqual<IRunResult>({
+      component: {
+        business_context: 'KYC onboarding',
+        name: 'KYC verification wizard',
+        type: 'wizard',
+      },
+      extraction: {
+        constraints: [],
+        specified_states: [],
+        tokens_referenced: [],
+      },
+      gap_analysis: {
+        accessibility_gaps: [],
+        missing_states: [],
+        recommendations: [],
+        responsive_gaps: [],
+      },
+      generated_code: {
+        files: [],
+        framework: 'React',
+        states_covered: ['default'],
+        tokens_used: [],
+      },
+      validation: {
+        accessibility_score: 'partial_pass',
+        hallucinations_caught: [],
+        issues_found: [],
+        states_coverage: '1/1',
+        token_compliance: true,
+      },
+    });
+  });
 });

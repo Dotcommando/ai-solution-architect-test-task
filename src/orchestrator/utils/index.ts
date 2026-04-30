@@ -851,6 +851,8 @@ export function mapRootComponentType(
       return RUN_FINAL_COMPONENT_TYPE.PAGE;
     case UI_COMPONENT_TYPE.TABLE:
       return RUN_FINAL_COMPONENT_TYPE.TABLE;
+    case UI_COMPONENT_TYPE.WIZARD:
+      return RUN_FINAL_COMPONENT_TYPE.WIZARD;
     default:
       return null;
   }

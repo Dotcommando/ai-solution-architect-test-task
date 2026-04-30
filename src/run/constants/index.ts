@@ -34,6 +34,7 @@ export enum RUN_FINAL_COMPONENT_TYPE {
   MODAL = 'modal',
   PAGE = 'page',
   TABLE = 'table',
+  WIZARD = 'wizard',
 }
 
 export enum RUN_USER_FLOW_KIND {
