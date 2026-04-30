@@ -83,6 +83,10 @@ The implemented pipeline is:
 8. `component_generation` - iterative, one component at a time
 9. `validation`
 
+The `user_flows` stage is intentionally important in this pipeline.
+
+I consider it critical to force the LLM to think about how the final component will actually be used by a user. That makes it easier to discover corner cases earlier and to derive unit/e2e tests from realistic behavior instead of only from static structure.
+
 There is also a selective regeneration loop:
 - `component_generation -> validation`
 - if validation finds deterministic regeneration blockers, only affected components are regenerated
@@ -134,6 +138,10 @@ Deterministic checks currently cover:
 - hallucinated tokens / CSS variables
 - canonical state coverage
 - part of callback wiring / contract mismatch detection
+
+Design-system context is currently handled as follows:
+- tokens context is implemented programmatically
+- component context is passed selectively through neighboring/related components, not as a full global registry
 
 ## How to run
 
@@ -365,6 +373,12 @@ So `figmaUrl` is accepted by the API and can be passed through the pipeline cont
 
 ## AI usage
 
+Author note:
+- The project was built with the Codex plugin for IntelliJ IDEA.
+- At the moment, only the OpenAI API is used.
+- In the future, the LLM integration module can be replaced with a class that uses adapters for different providers. That is not a difficult change, but I am used to working with OpenAI.
+- Figma API is not used because I did not have real mockups available during implementation.
+
 Used:
 - OpenAI API
 - model configured via `OPENAI_MODEL`
@@ -391,6 +405,9 @@ What did not work well:
 - LLM output can still drift on contracts between parent and child components
 - validation policy needed repeated tightening to avoid false regeneration blockers
 - some structural issues are detected but not yet promoted strongly enough in orchestration policy
+- if this system were taken further, one important area to improve is import consistency across generated files
+- the practical way to address that is to keep baseline Angular and React project sandboxes with prepared boilerplates, including configured tests
+- then generated components and tests can target real project structure, and the LLM can orient imports relative to existing boilerplate files instead of inventing them
 
 ## Current weak spots
 
@@ -404,7 +421,13 @@ The biggest remaining weak spots are:
 
 Relevant files:
 - [03-solution-architect.md](./03-solution-architect.md)
+- [run-examples/sa_db.runs.json](./run-examples/sa_db.runs.json)
 - [src/app.controller.ts](./src/app.controller.ts)
 - [src/orchestrator/use-cases/run-orchestrator.use-case.ts](./src/orchestrator/use-cases/run-orchestrator.use-case.ts)
 - [src/validation/use-cases/run-validation-step.use-case.ts](./src/validation/use-cases/run-validation-step.use-case.ts)
 - [src/component-generation/use-cases/run-component-generation-step.use-case.ts](./src/component-generation/use-cases/run-component-generation-step.use-case.ts)
+
+Also:
+- [run-examples/sa_db.runs.json](./run-examples/sa_db.runs.json) contains example runs from my local work.
+- This is a dump from the MongoDB `runs` collection.
+- It is there in case you do not want to spend time bringing up the whole system and just want to inspect real pipeline outputs and run artifacts.
