@@ -6,8 +6,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApplicationExceptionFilter } from './common/filters/application-exception.filter';
 import { OrchestratorModule } from './orchestrator/orchestrator.module';
-import { ParsingModule } from './parsing/parsing.module';
 import { RunModule } from './run/run.module';
+import { SeedModule } from './seed/seed.module';
 
 @Module({
   imports: [
@@ -25,6 +25,7 @@ import { RunModule } from './run/run.module';
     }),
     OrchestratorModule,
     RunModule,
+    SeedModule,
   ],
   controllers: [AppController],
   providers: [

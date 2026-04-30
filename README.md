@@ -106,6 +106,12 @@ Prompts are versioned with:
 
 `variant` is there intentionally for future A/B testing of prompt strategies.
 
+On application startup, the service automatically seeds MongoDB from:
+- `dump/prompts.json`
+- `dump/steps.json`
+
+The seed is applied only when the target collection is empty. Existing MongoDB data is not overwritten on startup.
+
 ## Validation and reliability behavior
 
 Implemented:
@@ -188,6 +194,8 @@ This starts both:
 - `sa-app`
 
 API will listen on `http://localhost:3000`.
+
+During startup, `sa-app` also auto-loads prompts and steps from `dump/` into MongoDB if those collections are empty.
 
 ### 4. Optional local development mode
 
